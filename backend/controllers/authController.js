@@ -1,0 +1,40 @@
+const authService = require('../services/authService');
+
+const register = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    // Validate input
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'Please provide name, email, and password' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+
+    // Call service to register user
+    const { user, token } = await authService.registerUser({ name, email, password });
+
+    res.status(201).json({
+      message: 'User registered successfully',
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email
+      }
+    });
+  } catch (error) {
+    if (error.message === 'User already exists') {
+      return res.status(400).json({ message: error.message });
+    }
+    
+    console.error('Registration error:', error.message);
+    res.status(500).json({ message: 'Server Error' });
+  }
+};
+
+module.exports = {
+  register
+};
