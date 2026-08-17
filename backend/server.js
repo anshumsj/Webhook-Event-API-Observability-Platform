@@ -14,6 +14,7 @@ app.use(express.json()); // Parses incoming requests with JSON payloads
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/workspaces', require('./routes/workspaceRoutes'));
+app.use('/api/projects', require('./routes/projectRoutes'));
 
 // Health check route
 app.get('/api/health', (req, res) => {
