@@ -66,7 +66,27 @@ const login = async (req, res) => {
   }
 };
 
+const getMe = async (req, res) => {
+  try {
+    // req.user is set by the protect middleware
+    const user = await authService.getUserById(req.user.id);
+    
+    res.status(200).json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Get me error:', error.message);
+    res.status(500).json({ message: 'Server Error' });
+  }
+};
+
 module.exports = {
   register,
-  login
+  login,
+  getMe
 };
