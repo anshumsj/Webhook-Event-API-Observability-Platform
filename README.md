@@ -18,6 +18,14 @@ It is divided into a frontend (React/Vite) and backend (Node/Express).
   - `POST /api/auth/login`: User login generating a JSON Web Token (JWT).
   - `GET /api/auth/me`: Protected route returning the currently authenticated user's profile.
   - **Middleware**: Custom JWT verification middleware to protect private routes.
+- **Workspaces & Projects**:
+  - API routes to manage multi-tenant workspaces and projects.
+- **Webhook Ingestion Engine**:
+  - `WebhookEndpoint` model for securely generating endpoint IDs and signing secrets.
+  - `WebhookEvent` model for persisting incoming webhook payloads, headers, and processing status.
+  - `POST /api/webhooks/:endpointId`: Receiver API that validates the endpoint and securely records the event.
+- **Observability & Tracing**:
+  - Global request ID correlation middleware that generates or reads `X-Request-ID` headers to ensure distributed tracing capabilities when scaling out to queues and workers.
 
 ### Frontend
 - **Framework**: React initialized via Vite.
