@@ -18,6 +18,7 @@ const ingestWebhook = async (req, res) => {
     // 2. Save incoming webhook request
     const event = new WebhookEvent({
       projectId: endpoint.projectId,
+      requestId: req.requestId,
       payload: req.body,
       headers: req.headers,
       status: 'received'
@@ -26,6 +27,7 @@ const ingestWebhook = async (req, res) => {
 
     // 3. Log payload
     console.log(`\n--- [Webhook Ingest] Received Event ---`);
+    console.log(`Request ID: ${req.requestId}`);
     console.log(`Endpoint ID: ${endpointId}`);
     console.log(`Event ID: ${event.eventId}`);
     console.log('Headers:', JSON.stringify(req.headers, null, 2));
@@ -34,13 +36,14 @@ const ingestWebhook = async (req, res) => {
 
     // 4. Return success response
     // Using 202 Accepted to indicate successful receipt before async processing
-    res.status(202).json({ success: true, message: 'Webhook received', eventId: event.eventId });
+    res.status(202).json({ success: true, message: 'Webhook received', eventId: event.eventId, requestId: req.requestId });
 
   } catch (error) {
-    console.error('Error ingesting webhook:', error);
+    console.error(`[${req.requestId}] Error ingesting webhook:`, error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error processing webhook'
+      message: 'Internal server error processing webhook',
+      requestId: req.requestId
     });
   }
 };

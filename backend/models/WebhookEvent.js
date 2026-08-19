@@ -16,6 +16,10 @@ const webhookEventSchema = new mongoose.Schema({
     unique: true,
     default: () => generateRandomString(12)
   },
+  requestId: {
+    type: String,
+    required: true
+  },
   payload: {
     type: mongoose.Schema.Types.Mixed,
     required: true
