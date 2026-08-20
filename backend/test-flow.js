@@ -1,56 +1,95 @@
 const axios = require('axios');
+const mongoose = require('mongoose');
+
+// Need to load models to inject an endpoint since we don't have an API for it yet
+require('dotenv').config();
+const WebhookEndpoint = require('./models/WebhookEndpoint');
+const Project = require('./models/Project');
 
 async function runTest() {
   const baseURL = 'http://localhost:3001/api';
   
   try {
-    const email = `test_${Date.now()}@test.com`;
+    await mongoose.connect(process.env.MONGODB_URI);
+
+    // ---- SETUP USER 1 & WORKSPACE & PROJECT ----
+    const email1 = `test1_${Date.now()}@test.com`;
     const password = 'password123';
     
-    console.log('-> POST /api/auth/register (Registering user)');
-    await axios.post(`${baseURL}/auth/register`, { name: 'Test User', email, password });
+    console.log('-> Registering User 1...');
+    await axios.post(`${baseURL}/auth/register`, { name: 'User 1', email: email1, password });
     
-    console.log('-> POST /api/auth/login (Logging in)');
-    const loginRes = await axios.post(`${baseURL}/auth/login`, { email, password });
-    const token = loginRes.data.token;
-    console.log('   JWT Received:', token.substring(0, 20) + '...');
+    console.log('-> Logging in User 1...');
+    const loginRes1 = await axios.post(`${baseURL}/auth/login`, { email: email1, password });
+    const token1 = loginRes1.data.token;
+    const api1 = axios.create({ baseURL, headers: { Authorization: `Bearer ${token1}` } });
     
-    const api = axios.create({
-      baseURL,
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    
-    console.log('-> GET /api/auth/me (Fetching profile)');
-    const meRes = await api.get('/auth/me');
-    console.log('   User ID:', meRes.data._id);
-    
-    console.log('-> POST /api/workspaces (Creating Workspace)');
-    const wsRes = await api.post('/workspaces', { name: 'Test Workspace' });
+    console.log('-> Creating Workspace for User 1...');
+    const wsRes = await api1.post('/workspaces', { name: 'Workspace 1' });
     const workspaceId = wsRes.data._id;
     
-    console.log('-> GET /api/workspaces (Fetching user workspaces)');
-    const getWsRes = await api.get('/workspaces');
-    const activeWorkspace = getWsRes.data[0];
-    console.log('   Active Workspace:', activeWorkspace.name);
+    console.log('-> Creating Project 1...');
+    const p1Res = await api1.post('/projects', { name: 'Project 1', workspaceId });
+    const projectId1 = p1Res.data._id;
     
-    console.log(`-> POST /api/projects (Creating Project in ${activeWorkspace._id})`);
-    await api.post('/projects', { name: 'Test Project', workspaceId: activeWorkspace._id });
+    // ---- INJECT ENDPOINT DIRECTLY ----
+    console.log('-> Mocking Endpoint in DB...');
+    const endpoint = new WebhookEndpoint({ projectId: projectId1 });
+    await endpoint.save();
     
-    console.log(`-> GET /api/projects/${activeWorkspace._id} (Fetching projects for workspace)`);
-    const getProjRes = await api.get(`/projects/${activeWorkspace._id}`);
-    console.log('   Projects fetched:', getProjRes.data.length);
-    console.log('   First Project Name:', getProjRes.data[0].name);
+    // ---- TEST INGESTION (Event Type Extraction) ----
+    console.log('-> Ingesting GitHub Webhook...');
+    await axios.post(`${baseURL}/webhooks/${endpoint.endpointId}`, { action: 'push' }, {
+      headers: { 'x-github-event': 'push' }
+    });
     
-    console.log('\n✅ End-to-end API test completed successfully!');
-  } catch (err) {
+    console.log('-> Ingesting Stripe Webhook...');
+    await axios.post(`${baseURL}/webhooks/${endpoint.endpointId}`, { type: 'charge.succeeded' }, {
+      headers: { 'stripe-signature': 'sig_123' }
+    });
+
+    console.log('-> Ingesting Generic Webhook...');
+    await axios.post(`${baseURL}/webhooks/${endpoint.endpointId}`, { data: 'hello' });
+
+    // ---- TEST GET EVENTS API (Project Scoped & Pagination) ----
+    console.log(`-> GET /api/events/project/${projectId1}?page=1&limit=2`);
+    const getEvRes = await api1.get(`/events/project/${projectId1}?page=1&limit=2`);
+    
+    const { events, pagination } = getEvRes.data;
+    console.log(`   Fetched ${events.length} events.`);
+    console.log(`   Pagination: Page ${pagination.page} of ${pagination.totalPages} (Total: ${pagination.total})`);
+    
+    events.forEach(e => console.log(`   - ID: ${e.eventId} | Type: ${e.eventType} | Status: ${e.status}`));
+    
+    // ---- TEST AUTHORIZATION ----
+    const email2 = `test2_${Date.now()}@test.com`;
+    console.log('\n-> Registering User 2...');
+    await axios.post(`${baseURL}/auth/register`, { name: 'User 2', email: email2, password });
+    const loginRes2 = await axios.post(`${baseURL}/auth/login`, { email: email2, password });
+    const api2 = axios.create({ baseURL, headers: { Authorization: `Bearer ${loginRes2.data.token}` } });
+
+    console.log('-> User 2 attempting to access Project 1 Events...');
+    try {
+      await api2.get(`/events/project/${projectId1}`);
+      console.log('❌ FAIL: User 2 was able to access Project 1!');
+    } catch (err) {
+      if (err.response?.status === 403) {
+        console.log('✅ SUCCESS: User 2 correctly received 403 Forbidden.');
+      } else {
+        console.log('❌ FAIL: User 2 received unexpected error:', err.response?.status);
+      }
+    }
+    
+    console.log('\n✅ End-to-end Event Test completed successfully!');
+    process.exit(0);
+  } catch(e) {
     console.error('\n❌ Test failed:');
-    if (err.response) {
-      console.error(err.response.status, err.response.data);
+    if (e.response) {
+      console.error(e.response.status, e.response.data);
     } else {
-      console.error(err.message);
+      console.error(e.message);
     }
     process.exit(1);
   }
 }
-
 runTest();
