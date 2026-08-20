@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useWorkspace } from '../context/WorkspaceContext';
 import api from '../services/api';
 import { Activity, Clock, CheckCircle2, XCircle, Loader2, ChevronLeft, ChevronRight, FolderKanban } from 'lucide-react';
@@ -6,6 +7,7 @@ import { format } from 'date-fns';
 
 export default function Events() {
   const { activeWorkspace } = useWorkspace();
+  const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   
@@ -183,7 +185,11 @@ export default function Events() {
               </thead>
               <tbody className="divide-y divide-border">
                 {events.map((event) => (
-                  <tr key={event._id} className="hover:bg-white/5 transition-colors group cursor-pointer">
+                  <tr 
+                    key={event._id} 
+                    onClick={() => navigate(`/events/${event.eventId}`)}
+                    className="hover:bg-white/5 transition-colors group cursor-pointer"
+                  >
                     <td className="px-6 py-4 font-mono text-xs text-muted group-hover:text-primary transition-colors">
                       {event.eventId.substring(0, 12)}...
                     </td>

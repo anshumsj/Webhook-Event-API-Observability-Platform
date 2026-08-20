@@ -99,7 +99,54 @@ const getEventsByProject = async (req, res) => {
   }
 };
 
+const getEventById = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    // 1. Fetch event
+    const event = await WebhookEvent.findOne({ eventId });
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // 2. Fetch project
+    const project = await Project.findById(event.projectId);
+    if (!project) {
+      return res.status(404).json({ message: 'Project associated with event not found' });
+    }
+
+    // 3. Authorize via workspace
+    const workspace = await Workspace.findOne({
+      _id: project.workspaceId,
+      $or: [{ owner: req.user.id }, { members: req.user.id }]
+    });
+
+    // 4. Redact sensitive headers
+    const redactedHeaders = { ...event.headers };
+    const sensitiveKeys = ['authorization', 'cookie', 'x-api-key', 'stripe-signature', 'x-hub-signature', 'secret'];
+    
+    for (const key of Object.keys(redactedHeaders)) {
+      if (sensitiveKeys.some(sensitive => key.toLowerCase().includes(sensitive))) {
+        redactedHeaders[key] = '[REDACTED]';
+      }
+    }
+
+    // 5. Construct safe response
+    const safeEvent = {
+      ...event.toObject(),
+      headers: redactedHeaders,
+      projectName: project.name
+    };
+
+    res.status(200).json(safeEvent);
+  } catch (error) {
+    console.error('Error fetching event by ID:', error);
+    res.status(500).json({ message: 'Server error retrieving event' });
+  }
+};
+
 module.exports = {
   ingestWebhook,
-  getEventsByProject
+  getEventsByProject,
+  getEventById
 };
