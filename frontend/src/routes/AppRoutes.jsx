@@ -1,14 +1,32 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Home from '../pages/Home';
+import Login from '../pages/Login';
+import Projects from '../pages/Projects';
 import DashboardLayout from '../components/layout/DashboardLayout';
+import { useAuth } from '../context/AuthContext';
+
+// Simple protected route wrapper
+const ProtectedRoute = ({ children }) => {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" />;
+  return children;
+};
 
 const AppRoutes = () => {
   return (
     <Router>
       <Routes>
-        <Route element={<DashboardLayout />}>
-          <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        
+        <Route element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }>
+          <Route path="/" element={<Navigate to="/projects" />} />
+          <Route path="/projects" element={<Projects />} />
+          <Route path="/home" element={<Home />} />
         </Route>
       </Routes>
     </Router>
