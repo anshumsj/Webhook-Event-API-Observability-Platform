@@ -34,6 +34,17 @@ const webhookEventSchema = new mongoose.Schema({
     enum: ['received', 'processed', 'failed'],
     default: 'received'
   },
+  eventType: {
+    type: String,
+    default: 'webhook.received'
+  },
+  processingTimeMs: {
+    type: Number,
+    default: 0
+  },
+  processedAt: {
+    type: Date
+  },
   receivedAt: {
     type: Date,
     default: Date.now

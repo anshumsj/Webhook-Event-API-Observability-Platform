@@ -18,6 +18,7 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/workspaces', require('./routes/workspaceRoutes'));
 app.use('/api/projects', require('./routes/projectRoutes'));
 app.use('/api/webhooks', require('./routes/webhookRoutes'));
+app.use('/api/events', require('./routes/eventRoutes'));
 
 // Health check route
 app.get('/api/health', (req, res) => {

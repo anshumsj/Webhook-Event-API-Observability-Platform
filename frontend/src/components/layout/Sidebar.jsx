@@ -6,7 +6,7 @@ const navItems = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
   { name: 'Projects', path: '/projects', icon: FolderKanban },
   { name: 'Endpoints', path: '/endpoints', icon: Webhook },
-  { name: 'Logs', path: '/logs', icon: Activity },
+  { name: 'Events', path: '/events', icon: Activity },
 ];
 
 export default function Sidebar() {
