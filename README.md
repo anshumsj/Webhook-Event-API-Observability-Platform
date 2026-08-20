@@ -24,13 +24,25 @@ It is divided into a frontend (React/Vite) and backend (Node/Express).
   - `WebhookEndpoint` model for securely generating endpoint IDs and signing secrets.
   - `WebhookEvent` model for persisting incoming webhook payloads, headers, and processing status.
   - `POST /api/webhooks/:endpointId`: Receiver API that validates the endpoint and securely records the event.
+- **Events API (Project Scoped)**:
+  - `GET /api/events/project/:projectId`: Fetch paginated events securely.
+  - `GET /api/events/:eventId`: Fetch individual event details with sensitive header redaction.
+  - Strict Authorization: Ensures `req.user` is a member of the Workspace owning the Project.
 - **Observability & Tracing**:
   - Global request ID correlation middleware that generates or reads `X-Request-ID` headers to ensure distributed tracing capabilities when scaling out to queues and workers.
 
 ### Frontend
-- **Framework**: React initialized via Vite.
-- **Routing**: React Router configured with a central `AppRoutes` file.
-- **API Client**: Reusable Axios instance pre-configured to communicate with the backend (`src/services/api.js`).
+- **Framework & Styling**: React (Vite) + Tailwind CSS for a premium dark-themed UI.
+- **Authentication Flow**: 
+  - JWT integration via `AuthContext`.
+  - Axios interceptors for global 401 Unauthorized handling & seamless token injection.
+- **Dashboard Layout**: 
+  - Dynamic `Sidebar` and `Navbar`.
+  - `WorkspaceContext` handles auto-fetching and switching multi-tenant workspaces.
+- **Projects & Webhooks UI**:
+  - **Projects View**: Safely fetches and lists all projects in the active workspace.
+  - **Events Dashboard**: Real-time paginated table displaying event ID, parsed Event Type, Status, Timestamp, and Processing Time.
+  - **Event Details View**: Deep dive into individual webhooks. Displays safe JSON payload formatting, redacted headers list, rich metadata, and a visual processing timeline placeholder.
 - **Architecture**: Folders scaffolded for `components`, `context`, `hooks`, `pages`, `routes`, and `services`.
 
 ## Getting Started
