@@ -4,6 +4,7 @@ import Home from '../pages/Home';
 import Login from '../pages/Login';
 import Projects from '../pages/Projects';
 import Events from '../pages/Events';
+import EventDetails from '../pages/EventDetails';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 
@@ -28,6 +29,7 @@ const AppRoutes = () => {
           <Route path="/" element={<Navigate to="/projects" />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/events" element={<Events />} />
+          <Route path="/events/:eventId" element={<EventDetails />} />
           <Route path="/home" element={<Home />} />
         </Route>
       </Routes>
