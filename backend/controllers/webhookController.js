@@ -4,6 +4,7 @@ const Project = require('../models/Project');
 const Workspace = require('../models/Workspace');
 
 const ingestWebhook = async (req, res) => {
+  const startTime = Date.now();
   try {
     const { endpointId } = req.params;
 
@@ -31,16 +32,39 @@ const ingestWebhook = async (req, res) => {
     });
     await event.save();
 
-    // 3. Log payload
+    const processingTimeMs = Date.now() - startTime;
+
+    // 3. Emit real-time event via Socket.IO to the specific project room
+    try {
+      const io = require('../socket').getIO();
+      
+      // Construct safe payload for dashboard
+      const safePayload = {
+        eventId: event.eventId,
+        projectId: event.projectId,
+        eventType: event.eventType,
+        status: event.status,
+        receivedAt: event.receivedAt,
+        processingTimeMs
+      };
+      
+      io.to(`project:${event.projectId}`).emit('webhook:event:created', safePayload);
+    } catch (socketError) {
+      console.error(`[${req.requestId}] Error emitting socket event:`, socketError.message);
+      // We don't fail the webhook ingestion if socket fails
+    }
+
+    // 4. Log payload
     console.log(`\n--- [Webhook Ingest] Received Event ---`);
     console.log(`Request ID: ${req.requestId}`);
     console.log(`Endpoint ID: ${endpointId}`);
     console.log(`Event ID: ${event.eventId}`);
+    console.log(`Processing Time: ${processingTimeMs}ms`);
     console.log('Headers:', JSON.stringify(req.headers, null, 2));
     console.log('Payload:', JSON.stringify(req.body, null, 2));
     console.log(`---------------------------------------\n`);
 
-    // 4. Return success response
+    // 5. Return success response
     // Using 202 Accepted to indicate successful receipt before async processing
     res.status(202).json({ success: true, message: 'Webhook received', eventId: event.eventId, requestId: req.requestId });
 
