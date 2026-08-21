@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { useSocket } from '../context/SocketContext';
 import api from '../services/api';
-import { Activity, Clock, CheckCircle2, XCircle, Loader2, ChevronLeft, ChevronRight, FolderKanban } from 'lucide-react';
+import { Activity, Clock, CheckCircle2, XCircle, Loader2, ChevronLeft, ChevronRight, FolderKanban, ArrowUp } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Events() {
   const { activeWorkspace } = useWorkspace();
+  const { socket } = useSocket();
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
@@ -15,6 +17,7 @@ export default function Events() {
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [newEventsCount, setNewEventsCount] = useState(0);
 
   // 1. Fetch projects when workspace changes
   useEffect(() => {
@@ -32,17 +35,98 @@ export default function Events() {
   useEffect(() => {
     if (selectedProjectId) {
       fetchEvents(1); // Reset to page 1 on project change
+      setNewEventsCount(0);
     } else {
       setEvents([]);
     }
   }, [selectedProjectId]);
+
+  // 3. Handle Socket.IO connection and room joining
+  useEffect(() => {
+    if (!socket || !selectedProjectId) return;
+
+    // Join the project room
+    socket.emit('join_project', selectedProjectId);
+
+    const handleNewEvent = (newEvent) => {
+      // Ensure the event is for the currently selected project
+      if (newEvent.projectId !== selectedProjectId) return;
+
+      setEvents(prevEvents => {
+        // Prevent duplicate events
+        if (prevEvents.some(e => e.eventId === newEvent.eventId)) {
+          return prevEvents;
+        }
+
+        setPagination(prevPag => {
+          const isPageOne = prevPag.page === 1;
+          
+          if (isPageOne) {
+            // If we are on page 1, we will prepend the event
+            return {
+              ...prevPag,
+              total: prevPag.total + 1,
+              totalPages: Math.ceil((prevPag.total + 1) / prevPag.limit)
+            };
+          } else {
+            // If on page 2+, just increment total and new events count
+            setNewEventsCount(count => count + 1);
+            return {
+              ...prevPag,
+              total: prevPag.total + 1,
+              totalPages: Math.ceil((prevPag.total + 1) / prevPag.limit)
+            };
+          }
+        });
+
+        // Only update the actual event list if on page 1
+        // We use a functional update and check pagination inside to know if we are on page 1
+        // Wait, the state of pagination in this closure might be stale.
+        // It's safer to handle the page check directly here by adding `pagination.page` to dependencies, 
+        // or just let the functional update handle it. We can't access current page reliably here without putting it in deps.
+        return prevEvents; // We will handle actual insertion below to avoid closure staleness
+      });
+    };
+
+    socket.on('webhook:event:created', handleNewEvent);
+
+    return () => {
+      socket.off('webhook:event:created', handleNewEvent);
+      socket.emit('leave_project', selectedProjectId);
+    };
+  }, [socket, selectedProjectId]); // we will fix the insertion logic by adding pagination.page dependency in a separate effect.
+
+  // Real-time Event Insertion Logic
+  useEffect(() => {
+    if (!socket || !selectedProjectId) return;
+
+    const handleNewEventInsert = (newEvent) => {
+      if (newEvent.projectId !== selectedProjectId) return;
+
+      setEvents(prevEvents => {
+        if (prevEvents.some(e => e.eventId === newEvent.eventId)) return prevEvents;
+
+        if (pagination.page === 1) {
+          // Prepend and optionally pop if exceeding limit
+          const newList = [newEvent, ...prevEvents];
+          if (newList.length > pagination.limit) {
+            newList.pop();
+          }
+          return newList;
+        }
+        return prevEvents;
+      });
+    };
+
+    socket.on('webhook:event:created', handleNewEventInsert);
+    return () => socket.off('webhook:event:created', handleNewEventInsert);
+  }, [socket, selectedProjectId, pagination.page, pagination.limit]);
 
   const fetchProjects = async () => {
     try {
       const res = await api.get(`/projects/${activeWorkspace._id}`);
       setProjects(res.data);
       if (res.data.length > 0) {
-        // Only select first if nothing is selected or current selection is not in this workspace
         if (!selectedProjectId || !res.data.find(p => p._id === selectedProjectId)) {
           setSelectedProjectId(res.data[0]._id);
         }
@@ -63,6 +147,11 @@ export default function Events() {
       const res = await api.get(`/events/project/${selectedProjectId}?page=${pageToFetch}&limit=${pagination.limit}`);
       setEvents(res.data.events);
       setPagination(res.data.pagination);
+      
+      // Clear new events count when returning to page 1
+      if (pageToFetch === 1) {
+        setNewEventsCount(0);
+      }
     } catch (err) {
       console.error('Error fetching events:', err);
       setError('Failed to load events. Please try again later.');
@@ -145,6 +234,18 @@ export default function Events() {
       {error && (
         <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-4 rounded-xl">
           {error}
+        </div>
+      )}
+
+      {newEventsCount > 0 && pagination.page > 1 && (
+        <div className="flex justify-center">
+          <button
+            onClick={() => handlePageChange(1)}
+            className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-full font-medium shadow-lg hover:shadow-primary/25 hover:-translate-y-0.5 transition-all animate-in fade-in slide-in-from-top-4"
+          >
+            <ArrowUp className="w-4 h-4" />
+            {newEventsCount} new event{newEventsCount > 1 ? 's' : ''} available
+          </button>
         </div>
       )}
 
