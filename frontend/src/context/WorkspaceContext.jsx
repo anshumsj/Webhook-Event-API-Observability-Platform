@@ -37,8 +37,21 @@ export const WorkspaceProvider = ({ children }) => {
     }
   };
 
+  const createWorkspace = async (name) => {
+    try {
+      const res = await api.post('/workspaces', { name });
+      const newWorkspace = res.data;
+      setWorkspaces([...workspaces, newWorkspace]);
+      setActiveWorkspace(newWorkspace);
+      return newWorkspace;
+    } catch (error) {
+      console.error('Error creating workspace:', error);
+      throw error;
+    }
+  };
+
   return (
-    <WorkspaceContext.Provider value={{ workspaces, activeWorkspace, setActiveWorkspace, loading }}>
+    <WorkspaceContext.Provider value={{ workspaces, activeWorkspace, setActiveWorkspace, createWorkspace, loading }}>
       {children}
     </WorkspaceContext.Provider>
   );

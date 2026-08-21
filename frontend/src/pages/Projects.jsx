@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import api from '../services/api';
-import { FolderKanban, Plus, MoreVertical } from 'lucide-react';
+import { FolderKanban, Plus, MoreVertical, X } from 'lucide-react';
 
 export default function Projects() {
   const { activeWorkspace } = useWorkspace();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
-
   const [error, setError] = useState(null);
+  
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [creatingProject, setCreatingProject] = useState(false);
 
   useEffect(() => {
     if (activeWorkspace) {
@@ -32,22 +35,87 @@ export default function Projects() {
     }
   };
 
+  const handleCreateProject = async (e) => {
+    e.preventDefault();
+    if (!newProjectName.trim()) return;
+    
+    setCreatingProject(true);
+    try {
+      await api.post('/projects', { 
+        name: newProjectName, 
+        workspaceId: activeWorkspace._id 
+      });
+      setNewProjectName('');
+      setShowCreateModal(false);
+      fetchProjects(); // Refresh the list
+    } catch (err) {
+      console.error('Error creating project:', err);
+      setError('Failed to create project');
+    } finally {
+      setCreatingProject(false);
+    }
+  };
+
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const { createWorkspace } = useWorkspace();
+
+  const handleCreateWorkspace = async (e) => {
+    e.preventDefault();
+    if (!newWorkspaceName.trim()) return;
+    try {
+      await createWorkspace(newWorkspaceName);
+    } catch (err) {
+      setError('Failed to create workspace');
+    }
+  };
+
   if (!activeWorkspace) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-muted">
-        <p>No active workspace selected. Please log in or create a workspace.</p>
+      <div className="flex flex-col items-center justify-center h-[70vh] text-text">
+        <div className="bg-surface border border-border rounded-xl p-8 max-w-md w-full text-center shadow-lg">
+          <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-6 text-primary">
+            <FolderKanban className="w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-bold mb-2">Welcome to HookSight</h2>
+          <p className="text-muted mb-8">Create your first workspace to start monitoring webhooks and managing projects.</p>
+          
+          <form onSubmit={handleCreateWorkspace} className="space-y-4 text-left">
+            {error && <div className="text-red-400 text-sm">{error}</div>}
+            <div>
+              <label className="block text-sm font-medium text-muted mb-1">Workspace Name</label>
+              <input
+                type="text"
+                placeholder="e.g. My Company, Acme Corp..."
+                className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary transition-colors text-text"
+                value={newWorkspaceName}
+                onChange={(e) => setNewWorkspaceName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={!newWorkspaceName.trim()}
+              className="w-full bg-primary text-surface font-semibold py-2 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              Create Workspace
+            </button>
+          </form>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-text">Projects</h1>
           <p className="text-muted mt-1">Manage projects in {activeWorkspace.name}</p>
         </div>
-        <button className="flex items-center gap-2 bg-primary text-surface px-4 py-2 rounded-lg font-medium hover:bg-primary/90 transition-colors">
+        <button 
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center gap-2 bg-primary text-surface px-4 py-2 rounded-lg font-medium hover:bg-primary/90 transition-colors"
+        >
           <Plus className="w-4 h-4" />
           New Project
         </button>
@@ -70,7 +138,10 @@ export default function Projects() {
           </div>
           <h3 className="text-lg font-medium text-text mb-1">No projects found</h3>
           <p className="text-muted mb-4 max-w-sm">Get started by creating a new project in this workspace.</p>
-          <button className="flex items-center gap-2 bg-surface border border-border text-text px-4 py-2 rounded-lg font-medium hover:bg-white/5 transition-colors">
+          <button 
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 bg-surface border border-border text-text px-4 py-2 rounded-lg font-medium hover:bg-white/5 transition-colors"
+          >
             <Plus className="w-4 h-4" />
             Create Project
           </button>
@@ -91,6 +162,53 @@ export default function Projects() {
               <p className="text-sm text-muted">ID: {project._id.substring(0, 8)}...</p>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Create Project Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <div className="bg-surface border border-border rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h3 className="text-lg font-semibold text-text">Create New Project</h3>
+              <button 
+                onClick={() => setShowCreateModal(false)}
+                className="p-1 text-muted hover:text-text rounded-md hover:bg-white/5 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateProject} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-muted mb-1">Project Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Production API Webhooks"
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary transition-colors text-text"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div className="pt-2 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-text hover:bg-white/5 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newProjectName.trim() || creatingProject}
+                  className="px-4 py-2 text-sm font-medium bg-primary text-surface rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {creatingProject ? 'Creating...' : 'Create Project'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
