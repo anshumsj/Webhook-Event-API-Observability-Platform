@@ -7,6 +7,7 @@ import Events from '../pages/Events';
 import EventDetails from '../pages/EventDetails';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
+import { SocketProvider } from '../context/SocketContext';
 
 // Simple protected route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -23,7 +24,9 @@ const AppRoutes = () => {
         
         <Route element={
           <ProtectedRoute>
-            <DashboardLayout />
+            <SocketProvider>
+              <DashboardLayout />
+            </SocketProvider>
           </ProtectedRoute>
         }>
           <Route path="/" element={<Navigate to="/projects" />} />
