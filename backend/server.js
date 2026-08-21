@@ -1,9 +1,12 @@
 require('dotenv').config();
 const express = require('express');
+const http = require('http');
 const connectDB = require('./config/database');
+const { initSocket } = require('./socket');
 const requestIdMiddleware = require('./middleware/requestId');
 
 const app = express();
+const server = http.createServer(app);
 const port = process.env.PORT || 3001;
 
 // Connect to MongoDB
@@ -27,6 +30,9 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-app.listen(port, () => {
+// Initialize Socket.IO
+initSocket(server);
+
+server.listen(port, () => {
   console.log(`Backend server listening on port ${port}`);
 });
