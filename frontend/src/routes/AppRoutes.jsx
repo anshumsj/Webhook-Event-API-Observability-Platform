@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Home from '../pages/Home';
 import Login from '../pages/Login';
 import Projects from '../pages/Projects';
+import Endpoints from '../pages/Endpoints';
 import Events from '../pages/Events';
 import EventDetails from '../pages/EventDetails';
 import DashboardLayout from '../components/layout/DashboardLayout';
@@ -29,11 +30,11 @@ const AppRoutes = () => {
             </SocketProvider>
           </ProtectedRoute>
         }>
-          <Route path="/" element={<Navigate to="/projects" />} />
+          <Route path="/" element={<Home />} />
           <Route path="/projects" element={<Projects />} />
+          <Route path="/endpoints" element={<Endpoints />} />
           <Route path="/events" element={<Events />} />
           <Route path="/events/:eventId" element={<EventDetails />} />
-          <Route path="/home" element={<Home />} />
         </Route>
       </Routes>
     </Router>

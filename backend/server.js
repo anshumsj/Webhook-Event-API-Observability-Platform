@@ -13,6 +13,11 @@ const port = process.env.PORT || 3001;
 connectDB();
 
 // Basic middleware
+const cors = require('cors');
+app.use(cors({
+  origin: 'http://localhost:5173', // Allow frontend origin
+  credentials: true
+}));
 app.use(express.json()); // Parses incoming requests with JSON payloads
 app.use(requestIdMiddleware); // Attach req.requestId to all requests
 
@@ -22,6 +27,7 @@ app.use('/api/workspaces', require('./routes/workspaceRoutes'));
 app.use('/api/projects', require('./routes/projectRoutes'));
 app.use('/api/webhooks', require('./routes/webhookRoutes'));
 app.use('/api/events', require('./routes/eventRoutes'));
+app.use('/api/endpoints', require('./routes/endpointRoutes'));
 
 // Health check route
 app.get('/api/health', (req, res) => {
