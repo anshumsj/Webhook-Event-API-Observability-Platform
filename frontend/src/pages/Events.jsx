@@ -41,60 +41,16 @@ export default function Events() {
     }
   }, [selectedProjectId]);
 
-  // 3. Handle Socket.IO connection and room joining
+  // 3. Handle Socket.IO room joining/leaving
   useEffect(() => {
     if (!socket || !selectedProjectId) return;
 
-    // Join the project room
     socket.emit('join_project', selectedProjectId);
 
-    const handleNewEvent = (newEvent) => {
-      // Ensure the event is for the currently selected project
-      if (newEvent.projectId !== selectedProjectId) return;
-
-      setEvents(prevEvents => {
-        // Prevent duplicate events
-        if (prevEvents.some(e => e.eventId === newEvent.eventId)) {
-          return prevEvents;
-        }
-
-        setPagination(prevPag => {
-          const isPageOne = prevPag.page === 1;
-          
-          if (isPageOne) {
-            // If we are on page 1, we will prepend the event
-            return {
-              ...prevPag,
-              total: prevPag.total + 1,
-              totalPages: Math.ceil((prevPag.total + 1) / prevPag.limit)
-            };
-          } else {
-            // If on page 2+, just increment total and new events count
-            setNewEventsCount(count => count + 1);
-            return {
-              ...prevPag,
-              total: prevPag.total + 1,
-              totalPages: Math.ceil((prevPag.total + 1) / prevPag.limit)
-            };
-          }
-        });
-
-        // Only update the actual event list if on page 1
-        // We use a functional update and check pagination inside to know if we are on page 1
-        // Wait, the state of pagination in this closure might be stale.
-        // It's safer to handle the page check directly here by adding `pagination.page` to dependencies, 
-        // or just let the functional update handle it. We can't access current page reliably here without putting it in deps.
-        return prevEvents; // We will handle actual insertion below to avoid closure staleness
-      });
-    };
-
-    socket.on('webhook:event:created', handleNewEvent);
-
     return () => {
-      socket.off('webhook:event:created', handleNewEvent);
       socket.emit('leave_project', selectedProjectId);
     };
-  }, [socket, selectedProjectId]); // we will fix the insertion logic by adding pagination.page dependency in a separate effect.
+  }, [socket, selectedProjectId]);
 
   // Real-time Event Insertion Logic
   useEffect(() => {
