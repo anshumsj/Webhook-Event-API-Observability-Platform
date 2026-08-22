@@ -2,6 +2,7 @@ const WebhookEndpoint = require('../models/WebhookEndpoint');
 const WebhookEvent = require('../models/WebhookEvent');
 const Project = require('../models/Project');
 const Workspace = require('../models/Workspace');
+const { getWebhookQueue } = require('../queue/webhookQueue');
 
 const ingestWebhook = async (req, res) => {
   const startTime = Date.now();
@@ -10,7 +11,6 @@ const ingestWebhook = async (req, res) => {
 
     // 1. Validate endpoint
     const endpoint = await WebhookEndpoint.findOne({ endpointId });
-    
     if (!endpoint) {
       return res.status(404).json({
         success: false,
@@ -18,63 +18,81 @@ const ingestWebhook = async (req, res) => {
       });
     }
 
-    // Attempt to extract event type from common webhook headers
-    const eventType = req.headers['x-github-event'] || req.headers['x-event-type'] || req.body?.type || 'webhook.received';
+    // 2. Extract event type from common webhook provider headers
+    const eventType =
+      req.headers['x-github-event'] ||
+      req.headers['x-event-type']   ||
+      req.body?.type                 ||
+      'webhook.received';
 
-    // 2. Save incoming webhook request
+    // 3. Persist the raw event immediately — status starts as 'received'
     const event = new WebhookEvent({
       projectId: endpoint.projectId,
       requestId: req.requestId,
-      payload: req.body,
-      headers: req.headers,
-      status: 'received',
-      eventType
+      payload:   req.body,
+      headers:   req.headers,
+      status:    'received',
+      eventType,
     });
     await event.save();
 
-    const processingTimeMs = Date.now() - startTime;
+    const ingestTimeMs = Date.now() - startTime;
 
-    // 3. Emit real-time event via Socket.IO to the specific project room
+    // 4. Emit 'webhook:event:created' immediately so the dashboard shows
+    //    the event at 'received' status without waiting for the worker.
     try {
       const io = require('../socket').getIO();
-      
-      // Construct safe payload for dashboard
-      const safePayload = {
-        _id: event._id,
-        eventId: event.eventId,
-        projectId: String(event.projectId),
-        eventType: event.eventType,
-        status: event.status,
-        receivedAt: event.receivedAt instanceof Date ? event.receivedAt.toISOString() : event.receivedAt,
-        processingTimeMs: Number(processingTimeMs)
-      };
-      
-      io.to(`project:${event.projectId}`).emit('webhook:event:created', safePayload);
+      io.to(`project:${event.projectId}`).emit('webhook:event:created', {
+        _id:              String(event._id),
+        eventId:          event.eventId,
+        projectId:        String(event.projectId),
+        eventType:        event.eventType,
+        status:           'received',
+        receivedAt:       event.receivedAt instanceof Date
+                            ? event.receivedAt.toISOString()
+                            : event.receivedAt,
+        processingTimeMs: 0,
+      });
     } catch (socketError) {
-      console.error(`[${req.requestId}] Error emitting socket event:`, socketError.message);
-      // We don't fail the webhook ingestion if socket fails
+      console.error(`[${req.requestId}] Socket emit (created) failed:`, socketError.message);
     }
 
-    // 4. Log payload
-    console.log(`\n--- [Webhook Ingest] Received Event ---`);
-    console.log(`Request ID: ${req.requestId}`);
-    console.log(`Endpoint ID: ${endpointId}`);
-    console.log(`Event ID: ${event.eventId}`);
-    console.log(`Processing Time: ${processingTimeMs}ms`);
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('Payload:', JSON.stringify(req.body, null, 2));
-    console.log(`---------------------------------------\n`);
+    // 5. Enqueue the job for async processing.
+    //    The worker will update status → 'processed' and emit 'webhook:event:updated'.
+    try {
+      const queue = getWebhookQueue();
+      await queue.add('process-webhook', {
+        eventId:          event.eventId,
+        projectId:        String(event.projectId),
+        receivedAt:       event.receivedAt instanceof Date
+                            ? event.receivedAt.toISOString()
+                            : event.receivedAt,
+        processingTimeMs: ingestTimeMs,
+      });
+      console.log(`[${req.requestId}] Enqueued job for eventId: ${event.eventId}`);
+    } catch (queueError) {
+      // Queue failure is non-fatal — the event is already in MongoDB.
+      // It will stay in 'received' status until a retry mechanism handles it.
+      console.error(`[${req.requestId}] Failed to enqueue job:`, queueError.message);
+    }
 
-    // 5. Return success response
-    // Using 202 Accepted to indicate successful receipt before async processing
-    res.status(202).json({ success: true, message: 'Webhook received', eventId: event.eventId, requestId: req.requestId });
+    // 6. Log summary
+    console.log(`[Ingest] ${req.requestId} | endpoint: ${endpointId} | event: ${event.eventId} | ${ingestTimeMs}ms`);
+
+    // 7. Return 202 Accepted — we have received and persisted the event
+    res.status(202).json({
+      success:   true,
+      message:   'Webhook received',
+      eventId:   event.eventId,
+      requestId: req.requestId,
+    });
 
   } catch (error) {
     console.error(`[${req.requestId}] Error ingesting webhook:`, error);
     res.status(500).json({
-      success: false,
-      message: 'Internal server error processing webhook',
-      requestId: req.requestId
+      success:   false,
+      message:   'Internal server error processing webhook',
+      requestId: req.requestId,
     });
   }
 };

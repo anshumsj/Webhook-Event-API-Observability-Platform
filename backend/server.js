@@ -4,6 +4,7 @@ const http = require('http');
 const connectDB = require('./config/database');
 const { connectRedis } = require('./config/redis');
 const { initSocket } = require('./socket');
+const { startWorker } = require('./queue/webhookWorker');
 const requestIdMiddleware = require('./middleware/requestId');
 
 const app = express();
@@ -47,8 +48,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Initialize Socket.IO
+// Initialize Socket.IO — must come before startWorker so getIO() is available
 initSocket(server);
+
+// Start BullMQ worker — starts after Socket.IO is ready
+startWorker();
 
 server.listen(port, () => {
   console.log(`Backend server listening on port ${port}`);
