@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useSocket } from '../context/SocketContext';
@@ -12,9 +12,9 @@ export default function Events() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
-  
+
   const [events, setEvents] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
+  const [pagination, setPagination] = useState({ page: 1, limit: 2, total: 0, totalPages: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [newEventsCount, setNewEventsCount] = useState(0);
@@ -41,42 +41,59 @@ export default function Events() {
     }
   }, [selectedProjectId]);
 
-  // 3. Handle Socket.IO room joining/leaving
+  // Ref that always reflects the latest pagination state — never stale inside a closure.
+  const paginationRef = useRef(pagination);
+  useEffect(() => {
+    paginationRef.current = pagination;
+  }, [pagination]);
+
+  // 3. Join / leave the Socket.IO project room.
+  //    Separated from the event handler so the listener is NOT re-registered on every page change.
   useEffect(() => {
     if (!socket || !selectedProjectId) return;
-
     socket.emit('join_project', selectedProjectId);
-
     return () => {
       socket.emit('leave_project', selectedProjectId);
     };
   }, [socket, selectedProjectId]);
 
-  // Real-time Event Insertion Logic
+  // 4. Single stable webhook:event:created listener per project.
+  //    Reads current page from paginationRef — always fresh, no stale closure.
   useEffect(() => {
     if (!socket || !selectedProjectId) return;
 
-    const handleNewEventInsert = (newEvent) => {
+    const handleNewEvent = (newEvent) => {
       if (newEvent.projectId !== selectedProjectId) return;
 
-      setEvents(prevEvents => {
-        if (prevEvents.some(e => e.eventId === newEvent.eventId)) return prevEvents;
+      const { page, limit } = paginationRef.current;
 
-        if (pagination.page === 1) {
-          // Prepend and optionally pop if exceeding limit
-          const newList = [newEvent, ...prevEvents];
-          if (newList.length > pagination.limit) {
-            newList.pop();
-          }
-          return newList;
-        }
-        return prevEvents;
-      });
+      if (page === 1) {
+        // On page 1 → prepend event, trim to limit, update total
+        setEvents(prev => {
+          if (prev.some(e => e.eventId === newEvent.eventId)) return prev;
+          const updated = [newEvent, ...prev];
+          if (updated.length > limit) updated.pop();
+          return updated;
+        });
+        setPagination(prev => ({
+          ...prev,
+          total: prev.total + 1,
+          totalPages: Math.ceil((prev.total + 1) / prev.limit),
+        }));
+      } else {
+        // On page 2+ → do NOT touch the visible list, just show the banner
+        setNewEventsCount(count => count + 1);
+        setPagination(prev => ({
+          ...prev,
+          total: prev.total + 1,
+          totalPages: Math.ceil((prev.total + 1) / prev.limit),
+        }));
+      }
     };
 
-    socket.on('webhook:event:created', handleNewEventInsert);
-    return () => socket.off('webhook:event:created', handleNewEventInsert);
-  }, [socket, selectedProjectId, pagination.page, pagination.limit]);
+    socket.on('webhook:event:created', handleNewEvent);
+    return () => socket.off('webhook:event:created', handleNewEvent);
+  }, [socket, selectedProjectId]); // ← no pagination deps — ref handles freshness
 
   const fetchProjects = async () => {
     try {
@@ -96,14 +113,14 @@ export default function Events() {
 
   const fetchEvents = async (pageToFetch = pagination.page) => {
     if (!selectedProjectId) return;
-    
+
     setLoading(true);
     setError(null);
     try {
       const res = await api.get(`/events/project/${selectedProjectId}?page=${pageToFetch}&limit=${pagination.limit}`);
       setEvents(res.data.events);
       setPagination(res.data.pagination);
-      
+
       // Clear new events count when returning to page 1
       if (pageToFetch === 1) {
         setNewEventsCount(0);
@@ -176,7 +193,7 @@ export default function Events() {
             )}
           </select>
 
-          <button 
+          <button
             onClick={() => fetchEvents()}
             disabled={!selectedProjectId}
             className="flex items-center gap-2 bg-surface border border-border text-text px-4 py-2 rounded-lg font-medium hover:bg-white/5 transition-colors disabled:opacity-50"
@@ -242,8 +259,8 @@ export default function Events() {
               </thead>
               <tbody className="divide-y divide-border">
                 {events.map((event) => (
-                  <tr 
-                    key={event._id} 
+                  <tr
+                    key={event._id}
                     onClick={() => navigate(`/events/${event.eventId}`)}
                     className="hover:bg-white/5 transition-colors group cursor-pointer"
                   >
@@ -279,7 +296,7 @@ export default function Events() {
               </tbody>
             </table>
           </div>
-          
+
           {/* Pagination Controls */}
           {pagination.totalPages > 1 && (
             <div className="flex items-center justify-between border-t border-border px-6 py-3 bg-surface">
