@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const connectDB = require('./config/database');
+const { connectRedis } = require('./config/redis');
 const { initSocket } = require('./socket');
 const requestIdMiddleware = require('./middleware/requestId');
 
@@ -11,6 +12,9 @@ const port = process.env.PORT || 3001;
 
 // Connect to MongoDB
 connectDB();
+
+// Connect to Redis
+connectRedis();
 
 // Basic middleware
 const cors = require('cors');
