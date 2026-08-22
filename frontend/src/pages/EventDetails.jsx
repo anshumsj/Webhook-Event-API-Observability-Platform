@@ -141,12 +141,16 @@ export default function EventDetails() {
             </div>
             <div className="p-6">
               <div className="space-y-2">
-                {event.headers && Object.keys(event.headers).map((key) => (
-                  <div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 border-b border-white/5 pb-2 last:border-0 last:pb-0">
-                    <span className="font-mono text-xs text-text min-w-[200px]">{key}</span>
-                    <span className="font-mono text-xs text-muted break-all">{event.headers[key]}</span>
-                  </div>
-                ))}
+                {event.headers && Object.keys(event.headers).map((key) => {
+                  const val = event.headers[key];
+                  const displayVal = typeof val === 'object' ? JSON.stringify(val) : String(val);
+                  return (
+                    <div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 border-b border-white/5 pb-2 last:border-0 last:pb-0">
+                      <span className="font-mono text-xs text-text min-w-[200px]">{key}</span>
+                      <span className="font-mono text-xs text-muted break-all">{displayVal}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

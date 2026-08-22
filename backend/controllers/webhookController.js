@@ -40,12 +40,13 @@ const ingestWebhook = async (req, res) => {
       
       // Construct safe payload for dashboard
       const safePayload = {
+        _id: event._id,
         eventId: event.eventId,
-        projectId: event.projectId,
+        projectId: String(event.projectId),
         eventType: event.eventType,
         status: event.status,
-        receivedAt: event.receivedAt,
-        processingTimeMs
+        receivedAt: event.receivedAt instanceof Date ? event.receivedAt.toISOString() : event.receivedAt,
+        processingTimeMs: Number(processingTimeMs)
       };
       
       io.to(`project:${event.projectId}`).emit('webhook:event:created', safePayload);
@@ -145,24 +146,46 @@ const getEventById = async (req, res) => {
       $or: [{ owner: req.user.id }, { members: req.user.id }]
     });
 
-    // 4. Redact sensitive headers
-    const redactedHeaders = { ...event.headers };
-    const sensitiveKeys = ['authorization', 'cookie', 'x-api-key', 'stripe-signature', 'x-hub-signature', 'secret'];
-    
-    for (const key of Object.keys(redactedHeaders)) {
-      if (sensitiveKeys.some(sensitive => key.toLowerCase().includes(sensitive))) {
-        redactedHeaders[key] = '[REDACTED]';
-      }
+    if (!workspace) {
+      return res.status(403).json({ message: 'Not authorized to access this event' });
     }
 
-    // 5. Construct safe response
-    const safeEvent = {
-      ...event.toObject(),
-      headers: redactedHeaders,
-      projectName: project.name
+    // 4. Convert Mongoose Map → plain JS object.
+    //    headers is declared as `type: Map` in the schema. Spreading a Mongoose Map
+    //    directly leaks internal Mongoose properties ($__parent, $__path, etc.).
+    //    Object.fromEntries() on the Map gives us a clean, safe plain object.
+    const plainHeaders = event.headers instanceof Map
+      ? Object.fromEntries(event.headers)
+      : (event.headers ? Object.assign({}, event.headers) : {});
+
+    // 5. Redact sensitive headers — case-insensitive matching.
+    const sensitivePatterns = ['authorization', 'cookie', 'x-api-key', 'stripe-signature', 'x-hub-signature', 'secret'];
+    const redactedHeaders = {};
+    for (const [key, val] of Object.entries(plainHeaders)) {
+      const lowerKey = key.toLowerCase();
+      const isSensitive = sensitivePatterns.some(pattern => lowerKey.includes(pattern));
+      redactedHeaders[key] = isSensitive ? '[REDACTED]' : val;
+    }
+
+    // 6. Build an explicit, clean DTO — never spread toObject() directly,
+    //    as it can include Mongoose internals depending on schema config.
+    const dto = {
+      eventId:          event.eventId,
+      requestId:        event.requestId,
+      projectId:        String(event.projectId),
+      projectName:      project.name,
+      eventType:        event.eventType,
+      status:           event.status,
+      payload:          event.payload,
+      headers:          redactedHeaders,
+      processingTimeMs: event.processingTimeMs,
+      receivedAt:       event.receivedAt,
+      processedAt:      event.processedAt || null,
+      createdAt:        event.createdAt,
+      updatedAt:        event.updatedAt,
     };
 
-    res.status(200).json(safeEvent);
+    res.status(200).json(dto);
   } catch (error) {
     console.error('Error fetching event by ID:', error);
     res.status(500).json({ message: 'Server error retrieving event' });

@@ -15,7 +15,14 @@ connectDB();
 // Basic middleware
 const cors = require('cors');
 app.use(cors({
-  origin: 'http://localhost:5173', // Allow frontend origin
+  origin: (origin, callback) => {
+    // Allow requests from any localhost port (handles Vite port changes like 5173, 5174, etc.)
+    if (!origin || /^http:\/\/localhost(:\d+)?$/.test(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json()); // Parses incoming requests with JSON payloads
