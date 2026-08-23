@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { useSocket } from '../context/SocketContext';
 import { ArrowLeft, Clock, CheckCircle2, XCircle, Loader2, Database, Braces, AlignLeft, Box } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function EventDetails() {
   const { eventId } = useParams();
   const navigate = useNavigate();
+  const { socket } = useSocket();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -26,6 +28,31 @@ export default function EventDetails() {
     
     fetchEventDetails();
   }, [eventId]);
+
+  // Listen for the worker's 'processed' update — patch status/timing in-place.
+  // Join the project room once the event is loaded so we receive targeted updates.
+  useEffect(() => {
+    if (!socket || !event) return;
+
+    const projectId = event.projectId;
+    socket.emit('join_project', projectId);
+
+    const handleEventUpdate = (updatedEvent) => {
+      if (updatedEvent.eventId !== eventId) return;
+      setEvent(prev => ({
+        ...prev,
+        status:           updatedEvent.status,
+        processingTimeMs: updatedEvent.processingTimeMs,
+        processedAt:      updatedEvent.processedAt || prev.processedAt,
+      }));
+    };
+
+    socket.on('webhook:event:updated', handleEventUpdate);
+    return () => {
+      socket.off('webhook:event:updated', handleEventUpdate);
+      socket.emit('leave_project', projectId);
+    };
+  }, [socket, event?.projectId, eventId]);
 
   const getStatusIcon = (status) => {
     switch (status) {

@@ -95,6 +95,27 @@ export default function Events() {
     return () => socket.off('webhook:event:created', handleNewEvent);
   }, [socket, selectedProjectId]); // ← no pagination deps — ref handles freshness
 
+  // 5. webhook:event:updated — worker finished processing.
+  //    Patch the status and processingTimeMs of the matching row in-place.
+  //    No re-fetch needed — just a targeted mutation of existing state.
+  useEffect(() => {
+    if (!socket || !selectedProjectId) return;
+
+    const handleEventUpdate = (updatedEvent) => {
+      if (updatedEvent.projectId !== selectedProjectId) return;
+      setEvents(prev =>
+        prev.map(e =>
+          e.eventId === updatedEvent.eventId
+            ? { ...e, status: updatedEvent.status, processingTimeMs: updatedEvent.processingTimeMs }
+            : e
+        )
+      );
+    };
+
+    socket.on('webhook:event:updated', handleEventUpdate);
+    return () => socket.off('webhook:event:updated', handleEventUpdate);
+  }, [socket, selectedProjectId]);
+
   const fetchProjects = async () => {
     try {
       const res = await api.get(`/projects/${activeWorkspace._id}`);
