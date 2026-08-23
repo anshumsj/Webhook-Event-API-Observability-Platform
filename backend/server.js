@@ -51,8 +51,16 @@ app.get('/api/health', (req, res) => {
 // Initialize Socket.IO — must come before startWorker so getIO() is available
 initSocket(server);
 
-// Start BullMQ worker — starts after Socket.IO is ready
-startWorker();
+// Start BullMQ worker — pass socket emit so the worker can push real-time updates.
+// The worker uses this to emit 'webhook:event:updated' when a job is processed.
+const { getIO } = require('./socket');
+startWorker((room, event, payload) => {
+  try {
+    getIO().to(room).emit(event, payload);
+  } catch (e) {
+    console.error('[Server] Worker socket emit failed:', e.message);
+  }
+});
 
 server.listen(port, () => {
   console.log(`Backend server listening on port ${port}`);
