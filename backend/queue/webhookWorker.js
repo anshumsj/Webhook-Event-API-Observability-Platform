@@ -59,6 +59,10 @@ const buildProcessor = (emitFn) => async (job) => {
 
   // ── Step 2: Do actual processing work ───────────────────────────────────────
   // This is where future logic lives: forwarding, filtering, alerting, etc.
+  
+  // TEMP: development lifecycle testing (3-second delay to visually verify UI states)
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  
   // Currently a stub — the processing time is the measured round-trip.
   const totalMs = ingestMs + (Date.now() - workerStart);
 

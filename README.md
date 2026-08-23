@@ -1,55 +1,51 @@
 # Webhook Event Observability Platform
 
 This repository contains the monorepo structure for the Webhook Event Observability Platform. 
-It is divided into a frontend (React/Vite) and backend (Node/Express).
+It is divided into a frontend (React/Vite) and backend (Node/Express/Worker).
 
-## Project Structure
+## Architecture
 
-- `frontend/`: React application configured with Vite, React Router, and Axios.
-- `backend/`: Node.js Express server with MongoDB integration.
+The platform uses an asynchronous, highly-scalable architecture:
+1. **API Server (Express)**: Ingests webhooks, validates them, saves them to MongoDB, and pushes a job to Redis. Returns `202 Accepted` immediately.
+2. **Queue (Redis + BullMQ)**: Buffers incoming webhook events to seamlessly handle massive traffic spikes.
+3. **Worker**: A separate process that consumes jobs from the queue, processes the webhooks, and updates MongoDB. Supports retries, exponential backoff, and concurrent processing.
+4. **Real-time Engine (Socket.IO)**: Broadcasts lifecycle state changes (`received` → `queued` → `processing` → `processed`/`failed`) directly to the frontend.
 
-## Features Implemented So Far
+## Features
 
 ### Backend
-- **Express Server**: Basic REST API setup with `dotenv` configuration.
-- **Database**: MongoDB connection using Mongoose (`config/database.js`).
+- **Express Server**: REST API setup with `dotenv` configuration.
+- **Database**: MongoDB connection using Mongoose.
+- **Asynchronous Queue**: Redis and BullMQ for reliable, scalable webhook processing.
+- **Standalone Worker**: Processes webhooks asynchronously.
+- **Real-time WebSockets**: Socket.IO integration for live UI updates.
 - **User Authentication**:
-  - `POST /api/auth/register`: User registration with bcrypt password hashing.
-  - `POST /api/auth/login`: User login generating a JSON Web Token (JWT).
-  - `GET /api/auth/me`: Protected route returning the currently authenticated user's profile.
-  - **Middleware**: Custom JWT verification middleware to protect private routes.
-- **Workspaces & Projects**:
-  - API routes to manage multi-tenant workspaces and projects.
+  - `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`.
+  - Custom JWT verification middleware.
+- **Workspaces & Projects**: Multi-tenant isolation.
 - **Webhook Ingestion Engine**:
-  - `WebhookEndpoint` model for securely generating endpoint IDs and signing secrets.
-  - `WebhookEvent` model for persisting incoming webhook payloads, headers, and processing status.
-  - `POST /api/webhooks/:endpointId`: Receiver API that validates the endpoint and securely records the event.
+  - `WebhookEndpoint` model for securely generating endpoint IDs.
+  - `WebhookEvent` model with a full 5-state lifecycle (`received`, `queued`, `processing`, `processed`, `failed`).
+  - `POST /api/webhooks/:endpointId`: Receiver API returning immediate `202 Accepted`.
 - **Events API (Project Scoped)**:
-  - `GET /api/events/project/:projectId`: Fetch paginated events securely.
-  - `GET /api/events/:eventId`: Fetch individual event details with sensitive header redaction.
-  - Strict Authorization: Ensures `req.user` is a member of the Workspace owning the Project.
-- **Observability & Tracing**:
-  - Global request ID correlation middleware that generates or reads `X-Request-ID` headers to ensure distributed tracing capabilities when scaling out to queues and workers.
+  - Securely fetch paginated events and individual event details with sensitive header redaction.
+- **Observability & Tracing**: Global `X-Request-ID` correlation middleware for distributed tracing across API, Queue, and Worker.
 
 ### Frontend
 - **Framework & Styling**: React (Vite) + Tailwind CSS for a premium dark-themed UI.
-- **Authentication Flow**: 
-  - JWT integration via `AuthContext`.
-  - Axios interceptors for global 401 Unauthorized handling & seamless token injection.
-- **Dashboard Layout**: 
-  - Dynamic `Sidebar` and `Navbar`.
-  - `WorkspaceContext` handles auto-fetching and switching multi-tenant workspaces.
+- **Authentication Flow**: JWT integration via `AuthContext` and Axios interceptors.
+- **Dashboard Layout**: Dynamic `Sidebar`, `Navbar`, and `WorkspaceContext` for multi-tenant switching.
 - **Projects & Webhooks UI**:
-  - **Projects View**: Safely fetches and lists all projects in the active workspace.
   - **Events Dashboard**: Real-time paginated table displaying event ID, parsed Event Type, Status, Timestamp, and Processing Time.
-  - **Event Details View**: Deep dive into individual webhooks. Displays safe JSON payload formatting, redacted headers list, rich metadata, and a visual processing timeline placeholder.
-- **Architecture**: Folders scaffolded for `components`, `context`, `hooks`, `pages`, `routes`, and `services`.
+  - **Event Details View**: Deep dive into individual webhooks. Displays safe JSON payload formatting, redacted headers list, rich metadata, and a live visual processing lifecycle timeline.
+  - **Live Updates**: The UI responds in real-time to Socket.IO events, updating statuses, badges, and the lifecycle timeline instantly without page refreshes.
 
 ## Getting Started
 
 ### Prerequisites
 - Node.js installed on your machine.
 - MongoDB running locally or a remote MongoDB URI.
+- Redis server running locally or a remote Redis URI.
 
 ### Setup Instructions
 1. Run `npm install` in the root directory. This will automatically install dependencies for both the frontend and backend workspaces.
@@ -57,6 +53,8 @@ It is divided into a frontend (React/Vite) and backend (Node/Express).
    ```env
    PORT=3001
    MONGODB_URI=mongodb://localhost:27017/webhook-observability
+   REDIS_HOST=localhost
+   REDIS_PORT=6379
    JWT_SECRET=your_super_secret_jwt_key
    ```
-3. Run `npm run dev` in the root directory. This will start both the React frontend and the Express backend development servers concurrently.
+3. Run `npm run dev` in the root directory. This will start the React frontend, the Express backend API, and the BullMQ Worker concurrently.
