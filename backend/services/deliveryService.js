@@ -29,7 +29,8 @@ const deliverWebhook = async (eventDoc, destinationUrl) => {
       'Content-Type': 'application/json',
       'User-Agent': 'HookSight-Delivery-Agent/1.0',
       'X-HookSight-Event-Id': eventDoc.eventId,
-      'X-HookSight-Event-Type': eventDoc.eventType
+      'X-HookSight-Event-Type': eventDoc.eventType,
+      'Idempotency-Key': eventDoc.eventId
     };
 
     // Forward x-github-event if it was present in the original headers
