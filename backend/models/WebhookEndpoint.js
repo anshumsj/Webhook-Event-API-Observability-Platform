@@ -20,6 +20,11 @@ const webhookEndpointSchema = new mongoose.Schema({
     type: String,
     required: true,
     default: () => generateRandomString(24) // Generates a 48-character hex string
+  },
+  destinationUrl: {
+    type: String,
+    trim: true,
+    default: null
   }
 }, {
   timestamps: true // Automatically adds createdAt and updatedAt fields

@@ -27,11 +27,12 @@ const ingestWebhook = async (req, res) => {
 
     // 3. Persist the raw event immediately — status starts as 'received'
     const event = new WebhookEvent({
-      projectId: endpoint.projectId,
-      requestId: req.requestId,
-      payload:   req.body,
-      headers:   req.headers,
-      status:    'received',
+      projectId:  endpoint.projectId,
+      endpointId: endpoint._id,
+      requestId:  req.requestId,
+      payload:    req.body,
+      headers:    req.headers,
+      status:     'received',
       eventType,
     });
     await event.save();
@@ -63,6 +64,7 @@ const ingestWebhook = async (req, res) => {
       await queue.add('process-webhook', {
         eventId:          event.eventId,
         projectId:        String(event.projectId),
+        endpointId:       String(event.endpointId),
         receivedAt:       event.receivedAt instanceof Date
                             ? event.receivedAt.toISOString()
                             : event.receivedAt,

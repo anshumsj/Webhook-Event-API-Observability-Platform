@@ -58,25 +58,36 @@ const buildProcessor = (emitFn) => async (job) => {
   }
 
   // ── Step 2: Do actual processing work ───────────────────────────────────────
-  // This is where future logic lives: forwarding, filtering, alerting, etc.
-  
-  // TEMP: development lifecycle testing (3-second delay to visually verify UI states)
-  await new Promise(resolve => setTimeout(resolve, 3000));
-  
-  // Currently a stub — the processing time is the measured round-trip.
+  // 1. Fetch the endpoint to get the destinationUrl
+  const WebhookEndpoint = require('../models/WebhookEndpoint');
+  const endpoint = await WebhookEndpoint.findById(job.data.endpointId);
+
+  let statusToSet = 'processed';
+
+  if (!endpoint || !endpoint.destinationUrl) {
+    console.warn(`[Worker] ⚠ Skipped delivery: No destination URL configured for endpointId: ${job.data.endpointId}`);
+    // Do not claim successful delivery if there is no destination URL.
+    // For Commit 30, we mark as failed to preserve the 4-state lifecycle.
+    statusToSet = 'failed';
+  } else {
+    // 2. Deliver the webhook
+    const { deliverWebhook } = require('../services/deliveryService');
+    await deliverWebhook(processingDoc, endpoint.destinationUrl);
+  }
+
   const totalMs = ingestMs + (Date.now() - workerStart);
 
-  // ── Step 3: Mark as 'processed' ─────────────────────────────────────────────
-  const processedDoc = await WebhookEvent.findOneAndUpdate(
+  // ── Step 3: Mark as 'processed' (or 'failed' if skipped) ──────────────────
+  const finalDoc = await WebhookEvent.findOneAndUpdate(
     { eventId },
-    { status: 'processed', processedAt: new Date(), processingTimeMs: totalMs },
+    { status: statusToSet, processedAt: new Date(), processingTimeMs: totalMs },
     { new: true }
   );
 
-  console.log(`[Worker] ✓  Processed | eventId: ${eventId} | ${totalMs}ms`);
+  console.log(`[Worker] ${statusToSet === 'processed' ? '✓ Processed' : '❌ Failed (No Destination)'} | eventId: ${eventId} | ${totalMs}ms`);
 
   if (typeof emitFn === 'function') {
-    emitFn(`project:${projectId}`, 'webhook:event:updated', buildSocketPayload(processedDoc));
+    emitFn(`project:${projectId}`, 'webhook:event:updated', buildSocketPayload(finalDoc));
   }
 };
 

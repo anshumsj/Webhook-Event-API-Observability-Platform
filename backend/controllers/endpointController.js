@@ -54,9 +54,12 @@ const createEndpoint = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to create endpoints for this project' });
     }
 
+    const { destinationUrl } = req.body;
+
     // 3. Generate new endpoint
     const endpoint = new WebhookEndpoint({
-      projectId
+      projectId,
+      destinationUrl: destinationUrl || null
     });
     
     await endpoint.save();

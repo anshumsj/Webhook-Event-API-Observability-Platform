@@ -10,6 +10,12 @@ const webhookEventSchema = new mongoose.Schema({
     required: [true, 'Project ID is required'],
     index: true
   },
+  endpointId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'WebhookEndpoint',
+    required: [true, 'Endpoint ID is required'],
+    index: true
+  },
   eventId: {
     type: String,
     required: true,
