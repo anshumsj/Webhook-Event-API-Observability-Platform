@@ -16,10 +16,11 @@ const TIMEOUT_MS = 10000; // 10 seconds
  * 
  * @param {Object} eventDoc - The WebhookEvent mongoose document.
  * @param {String} destinationUrl - The customer's target URL.
+ * @param {String} endpointSecret - The customer's endpoint secret used for HMAC signing.
  * @returns {Object} { status, statusText } on success (2xx).
  * @throws {Error} On network failure, timeout, or non-2xx status code.
  */
-const deliverWebhook = async (eventDoc, destinationUrl) => {
+const deliverWebhook = async (eventDoc, destinationUrl, endpointSecret) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -41,6 +42,14 @@ const deliverWebhook = async (eventDoc, destinationUrl) => {
     const payloadString = typeof eventDoc.payload === 'object' 
       ? JSON.stringify(eventDoc.payload) 
       : String(eventDoc.payload);
+
+    if (endpointSecret) {
+      const crypto = require('crypto');
+      const signature = crypto.createHmac('sha256', endpointSecret)
+                              .update(payloadString)
+                              .digest('hex');
+      safeHeaders['X-HookSight-Signature'] = `sha256=${signature}`;
+    }
 
     const response = await fetch(destinationUrl, {
       method: 'POST',

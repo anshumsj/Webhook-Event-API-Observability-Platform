@@ -84,7 +84,7 @@ const buildProcessor = (emitFn) => async (job) => {
 
     const { deliverWebhook } = require('../services/deliveryService');
     try {
-      const result = await deliverWebhook(processingDoc, endpoint.destinationUrl);
+      const result = await deliverWebhook(processingDoc, endpoint.destinationUrl, endpoint.secret);
       
       // Success (2xx)
       await DeliveryAttempt.findByIdAndUpdate(attemptDoc._id, {
