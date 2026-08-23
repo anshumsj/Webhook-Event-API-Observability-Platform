@@ -60,6 +60,7 @@ const buildProcessor = (emitFn) => async (job) => {
   // ── Step 2: Do actual processing work ───────────────────────────────────────
   // 1. Fetch the endpoint to get the destinationUrl
   const WebhookEndpoint = require('../models/WebhookEndpoint');
+  const DeliveryAttempt = require('../models/DeliveryAttempt');
   const endpoint = await WebhookEndpoint.findById(job.data.endpointId);
 
   let statusToSet = 'processed';
@@ -67,12 +68,47 @@ const buildProcessor = (emitFn) => async (job) => {
   if (!endpoint || !endpoint.destinationUrl) {
     console.warn(`[Worker] ⚠ Skipped delivery: No destination URL configured for endpointId: ${job.data.endpointId}`);
     // Do not claim successful delivery if there is no destination URL.
-    // For Commit 30, we mark as failed to preserve the 4-state lifecycle.
     statusToSet = 'failed';
   } else {
     // 2. Deliver the webhook
+    const attemptNumber = job.attemptsMade + 1;
+    const attemptStart = Date.now();
+    
+    let attemptDoc = await DeliveryAttempt.create({
+      webhookEventId: processingDoc._id,
+      endpointId: endpoint._id,
+      attemptNumber,
+      status: 'pending',
+      startedAt: new Date(attemptStart)
+    });
+
     const { deliverWebhook } = require('../services/deliveryService');
-    await deliverWebhook(processingDoc, endpoint.destinationUrl);
+    try {
+      const result = await deliverWebhook(processingDoc, endpoint.destinationUrl);
+      
+      // Success (2xx)
+      await DeliveryAttempt.findByIdAndUpdate(attemptDoc._id, {
+        status: 'success',
+        responseStatusCode: result.status,
+        latencyMs: Date.now() - attemptStart,
+        completedAt: new Date()
+      });
+      statusToSet = 'processed';
+    } catch (error) {
+      // Failure (non-2xx, network, timeout)
+      const isTimeout = error.message.includes('timed out');
+      await DeliveryAttempt.findByIdAndUpdate(attemptDoc._id, {
+        status: isTimeout ? 'timeout' : 'failed',
+        responseStatusCode: error.responseStatusCode,
+        responseBody: error.responseBody,
+        errorMessage: error.message,
+        latencyMs: Date.now() - attemptStart,
+        completedAt: new Date()
+      });
+      
+      // Rethrow so BullMQ retries
+      throw error;
+    }
   }
 
   const totalMs = ingestMs + (Date.now() - workerStart);

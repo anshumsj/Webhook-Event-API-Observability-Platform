@@ -222,7 +222,14 @@ const getEventById = async (req, res) => {
       redactedHeaders[key] = isSensitive ? '[REDACTED]' : val;
     }
 
-    // 6. Build an explicit, clean DTO — never spread toObject() directly,
+    // 6. Fetch delivery attempts
+    const DeliveryAttempt = require('../models/DeliveryAttempt');
+    const attempts = await DeliveryAttempt.find({ webhookEventId: event._id })
+      .sort({ attemptNumber: 1 })
+      .select('-__v')
+      .lean();
+
+    // 7. Build an explicit, clean DTO — never spread toObject() directly,
     //    as it can include Mongoose internals depending on schema config.
     const dto = {
       eventId:          event.eventId,
@@ -238,6 +245,7 @@ const getEventById = async (req, res) => {
       processedAt:      event.processedAt || null,
       createdAt:        event.createdAt,
       updatedAt:        event.updatedAt,
+      attempts:         attempts
     };
 
     res.status(200).json(dto);

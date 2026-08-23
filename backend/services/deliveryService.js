@@ -51,7 +51,11 @@ const deliverWebhook = async (eventDoc, destinationUrl) => {
     if (!response.ok) {
       // For Commit 30, we throw on all non-2xx to let BullMQ retry.
       // This preserves existing compatibility.
-      throw new Error(`Delivery failed with status: ${response.status} ${response.statusText}`);
+      const errorText = await response.text().catch(() => '');
+      const err = new Error(`Delivery failed with status: ${response.status} ${response.statusText}`);
+      err.responseStatusCode = response.status;
+      err.responseBody = errorText;
+      throw err;
     }
 
     return {
