@@ -167,7 +167,11 @@ export default function Events() {
         return <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
       case 'failed':
         return <XCircle className="w-4 h-4 text-rose-400" />;
-      default:
+      case 'processing':
+        return <Loader2 className="w-4 h-4 text-violet-400 animate-spin" />;
+      case 'queued':
+        return <Clock className="w-4 h-4 text-sky-400" />;
+      default: // received
         return <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />;
     }
   };
@@ -178,7 +182,11 @@ export default function Events() {
         return 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20';
       case 'failed':
         return 'bg-rose-400/10 text-rose-400 border-rose-400/20';
-      default:
+      case 'processing':
+        return 'bg-violet-400/10 text-violet-400 border-violet-400/20';
+      case 'queued':
+        return 'bg-sky-400/10 text-sky-400 border-sky-400/20';
+      default: // received
         return 'bg-amber-400/10 text-amber-400 border-amber-400/20';
     }
   };
@@ -281,7 +289,7 @@ export default function Events() {
               <tbody className="divide-y divide-border">
                 {events.map((event) => (
                   <tr
-                    key={event._id}
+                    key={event._id || event.eventId}
                     onClick={() => navigate(`/events/${event.eventId}`)}
                     className="hover:bg-white/5 transition-colors group cursor-pointer"
                   >

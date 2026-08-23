@@ -60,7 +60,11 @@ export default function EventDetails() {
         return <CheckCircle2 className="w-5 h-5 text-emerald-400" />;
       case 'failed':
         return <XCircle className="w-5 h-5 text-rose-400" />;
-      default:
+      case 'processing':
+        return <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />;
+      case 'queued':
+        return <Clock className="w-5 h-5 text-sky-400" />;
+      default: // received
         return <Loader2 className="w-5 h-5 text-amber-400 animate-spin" />;
     }
   };
@@ -71,7 +75,11 @@ export default function EventDetails() {
         return 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20';
       case 'failed':
         return 'bg-rose-400/10 text-rose-400 border-rose-400/20';
-      default:
+      case 'processing':
+        return 'bg-violet-400/10 text-violet-400 border-violet-400/20';
+      case 'queued':
+        return 'bg-sky-400/10 text-sky-400 border-sky-400/20';
+      default: // received
         return 'bg-amber-400/10 text-amber-400 border-amber-400/20';
     }
   };
@@ -224,64 +232,80 @@ export default function EventDetails() {
             </div>
           </div>
 
-          {/* Timeline Placeholder */}
+          {/* Timeline */}
           <div className="bg-surface border border-border rounded-xl shadow-sm">
             <div className="px-6 py-4 border-b border-border flex items-center gap-2">
               <Box className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold text-text">Timeline</h3>
+              <h3 className="font-semibold text-text">Lifecycle</h3>
             </div>
             <div className="p-6 relative">
               <div className="absolute left-[35px] top-8 bottom-8 w-px bg-border"></div>
-              
-              <div className="space-y-6 relative z-10">
-                <div className="flex items-start gap-4">
-                  <div className="w-8 h-8 rounded-full bg-emerald-400/20 border border-emerald-400/30 flex items-center justify-center shrink-0">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-text">Event Received</p>
-                    <p className="text-xs text-muted">{format(new Date(event.receivedAt), 'HH:mm:ss.SSS')}</p>
-                  </div>
-                </div>
 
-                <div className="flex items-start gap-4">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                    event.status !== 'received' 
-                      ? 'bg-emerald-400/20 border-emerald-400/30' 
-                      : 'bg-surface border-border border'
-                  }`}>
-                    {event.status !== 'received' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <div className="w-2 h-2 rounded-full bg-muted"></div>}
-                  </div>
-                  <div>
-                    <p className={`text-sm font-medium ${event.status !== 'received' ? 'text-text' : 'text-muted'}`}>Queued for Processing</p>
-                    {event.processedAt && (
-                      <p className="text-xs text-muted">{format(new Date(event.processedAt), 'HH:mm:ss.SSS')}</p>
-                    )}
-                  </div>
-                </div>
+              {/* Helper to determine which steps are done */}
+              {(() => {
+                const ORDER = ['received', 'queued', 'processing', 'processed'];
+                const currentIdx = ORDER.indexOf(event.status);
+                // 'failed' counts as after 'processing'
+                const failedIdx = event.status === 'failed' ? 3 : -1;
 
-                <div className="flex items-start gap-4">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                    event.status === 'processed' ? 'bg-emerald-400/20 border-emerald-400/30' : 
-                    event.status === 'failed' ? 'bg-rose-400/20 border-rose-400/30' :
-                    'bg-surface border-border border'
-                  }`}>
-                    {event.status === 'processed' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : 
-                     event.status === 'failed' ? <XCircle className="w-4 h-4 text-rose-400" /> :
-                     <div className="w-2 h-2 rounded-full bg-muted"></div>}
-                  </div>
-                  <div>
-                    <p className={`text-sm font-medium ${
-                      event.status === 'processed' ? 'text-text' : 
-                      event.status === 'failed' ? 'text-rose-400' : 'text-muted'
-                    }`}>
-                      {event.status === 'processed' ? 'Processing Completed' : 
-                       event.status === 'failed' ? 'Processing Failed' : 'Awaiting Worker'}
-                    </p>
-                  </div>
-                </div>
+                const steps = [
+                  { key: 'received',   label: 'Received',   time: event.receivedAt },
+                  { key: 'queued',     label: 'Queued',     time: null },
+                  { key: 'processing', label: 'Processing', time: null },
+                  { key: 'processed',  label: event.status === 'failed' ? 'Failed' : 'Processed', time: event.processedAt },
+                ];
 
-              </div>
+                return (
+                  <div className="space-y-6 relative z-10">
+                    {steps.map((step, idx) => {
+                      const isCurrent = event.status === step.key;
+                      const isDone = currentIdx > idx || (event.status === 'processed' && step.key === 'processed');
+                      const isFailed = event.status === 'failed' && step.key === 'processed';
+                      const isPending = !isDone && !isCurrent && !isFailed;
+
+                      let dotClass, icon;
+                      if (isFailed) {
+                        dotClass = 'bg-rose-400/20 border border-rose-400/30';
+                        icon = <XCircle className="w-4 h-4 text-rose-400" />;
+                      } else if (isDone) {
+                        dotClass = 'bg-emerald-400/20 border border-emerald-400/30';
+                        icon = <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
+                      } else if (isCurrent && step.key === 'processing') {
+                        dotClass = 'bg-violet-400/20 border border-violet-400/30';
+                        icon = <Loader2 className="w-4 h-4 text-violet-400 animate-spin" />;
+                      } else if (isCurrent && step.key === 'queued') {
+                        dotClass = 'bg-sky-400/20 border border-sky-400/30';
+                        icon = <Clock className="w-4 h-4 text-sky-400" />;
+                      } else if (isCurrent) {
+                        dotClass = 'bg-amber-400/20 border border-amber-400/30';
+                        icon = <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />;
+                      } else {
+                        dotClass = 'bg-surface border border-border';
+                        icon = <div className="w-2 h-2 rounded-full bg-muted"></div>;
+                      }
+
+                      return (
+                        <div key={step.key} className="flex items-start gap-4">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${dotClass}`}>
+                            {icon}
+                          </div>
+                          <div>
+                            <p className={`text-sm font-medium ${
+                              isFailed ? 'text-rose-400' :
+                              isDone || isCurrent ? 'text-text' : 'text-muted'
+                            }`}>{step.label}</p>
+                            {step.time && (
+                              <p className="text-xs text-muted">
+                                {format(new Date(step.time), 'HH:mm:ss.SSS')}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           </div>
           

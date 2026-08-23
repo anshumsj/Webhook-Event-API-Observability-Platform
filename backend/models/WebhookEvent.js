@@ -32,7 +32,7 @@ const webhookEventSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['received', 'processed', 'failed'],
+    enum: ['received', 'queued', 'processing', 'processed', 'failed'],
     default: 'received'
   },
   eventType: {

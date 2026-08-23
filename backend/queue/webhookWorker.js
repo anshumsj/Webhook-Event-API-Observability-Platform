@@ -1,66 +1,78 @@
 const { Worker } = require('bullmq');
 const { getRedis } = require('../config/redis');
-const { QUEUE_NAME } = require('./webhookQueue');
+const { QUEUE_NAME, RETRY_ATTEMPTS } = require('./webhookQueue');
 const WebhookEvent = require('../models/WebhookEvent');
 
 /**
- * Builds the BullMQ job processor function.
+ * Builds a safe socket payload from a Mongoose document.
+ * Always returns a plain, serializable object.
+ */
+const buildSocketPayload = (doc) => ({
+  _id:             String(doc._id),
+  eventId:         doc.eventId,
+  projectId:       String(doc.projectId),
+  eventType:       doc.eventType,
+  status:          doc.status,
+  receivedAt:      doc.receivedAt instanceof Date
+                     ? doc.receivedAt.toISOString()
+                     : doc.receivedAt,
+  processedAt:     doc.processedAt instanceof Date
+                     ? doc.processedAt.toISOString()
+                     : (doc.processedAt || null),
+  processingTimeMs: doc.processingTimeMs,
+});
+
+/**
+ * Builds the BullMQ job processor.
  *
- * @param {Function|null} emitFn
- *   Optional callback: (room, event, payload) => void
- *   When running inside the server process, the caller passes socket.io's emit.
- *   When running as a standalone process, pass null — socket emission is skipped.
+ * Lifecycle emitted:
+ *   job start → status: 'processing'  → webhook:event:updated
+ *   job end   → status: 'processed'   → webhook:event:updated
  *
- * Job data shape:
- *   { eventId, projectId, receivedAt, processingTimeMs }
+ * Failure (after all retries) is handled in the 'failed' event listener below.
+ *
+ * @param {Function|null} emitFn  (room, event, payload) => void
  */
 const buildProcessor = (emitFn) => async (job) => {
-  const { eventId, projectId, processingTimeMs } = job.data;
+  const { eventId, projectId, processingTimeMs: ingestMs } = job.data;
+  const workerStart = Date.now();
 
-  console.log(`[Worker] ▶ Job ${job.id} | eventId: ${eventId} | attempt: ${job.attemptsMade + 1}`);
+  console.log(`[Worker] ▶ Job ${job.id} | eventId: ${eventId} | attempt: ${job.attemptsMade + 1}/${RETRY_ATTEMPTS}`);
 
-  // 1. Identify the event in MongoDB
-  const updatedEvent = await WebhookEvent.findOneAndUpdate(
+  // ── Step 1: Mark as 'processing' ────────────────────────────────────────────
+  const processingDoc = await WebhookEvent.findOneAndUpdate(
     { eventId },
-    {
-      status:           'processed',
-      processedAt:      new Date(),
-      processingTimeMs,
-    },
+    { status: 'processing' },
     { new: true }
   );
 
-  if (!updatedEvent) {
-    // Event was deleted between ingestion and processing — not a retryable error.
-    console.warn(`[Worker] ⚠ Event not found in DB, skipping: ${eventId}`);
+  if (!processingDoc) {
+    console.warn(`[Worker] ⚠  Event not found, skipping: ${eventId}`);
     return;
   }
 
-  // 2. Log processing
-  console.log(`[Worker] ✓ MongoDB updated | eventId: ${eventId} | status: processed | ${processingTimeMs}ms`);
+  console.log(`[Worker] ⚙  Processing | eventId: ${eventId}`);
 
-  // 3. Emit real-time update if an emit function was provided (server mode)
   if (typeof emitFn === 'function') {
-    try {
-      const payload = {
-        _id:             String(updatedEvent._id),
-        eventId:         updatedEvent.eventId,
-        projectId:       String(updatedEvent.projectId),
-        eventType:       updatedEvent.eventType,
-        status:          'processed',
-        receivedAt:      updatedEvent.receivedAt instanceof Date
-                           ? updatedEvent.receivedAt.toISOString()
-                           : updatedEvent.receivedAt,
-        processingTimeMs: updatedEvent.processingTimeMs,
-      };
-      emitFn(`project:${projectId}`, 'webhook:event:updated', payload);
-      console.log(`[Worker] ⚡ Socket emitted webhook:event:updated | projectId: ${projectId}`);
-    } catch (socketError) {
-      // Socket failure must never cause a job retry
-      console.error(`[Worker] Socket emit failed for ${eventId}:`, socketError.message);
-    }
-  } else {
-    console.log(`[Worker]    Socket emit skipped (standalone mode)`);
+    emitFn(`project:${projectId}`, 'webhook:event:updated', buildSocketPayload(processingDoc));
+  }
+
+  // ── Step 2: Do actual processing work ───────────────────────────────────────
+  // This is where future logic lives: forwarding, filtering, alerting, etc.
+  // Currently a stub — the processing time is the measured round-trip.
+  const totalMs = ingestMs + (Date.now() - workerStart);
+
+  // ── Step 3: Mark as 'processed' ─────────────────────────────────────────────
+  const processedDoc = await WebhookEvent.findOneAndUpdate(
+    { eventId },
+    { status: 'processed', processedAt: new Date(), processingTimeMs: totalMs },
+    { new: true }
+  );
+
+  console.log(`[Worker] ✓  Processed | eventId: ${eventId} | ${totalMs}ms`);
+
+  if (typeof emitFn === 'function') {
+    emitFn(`project:${projectId}`, 'webhook:event:updated', buildSocketPayload(processedDoc));
   }
 };
 
@@ -68,8 +80,7 @@ let worker = null;
 
 /**
  * Starts the BullMQ Worker.
- *
- * @param {Function|null} emitFn  Optional socket emit function (see buildProcessor above).
+ * @param {Function|null} emitFn  Optional socket emit. Null in standalone mode.
  */
 const startWorker = (emitFn = null) => {
   worker = new Worker(QUEUE_NAME, buildProcessor(emitFn), {
@@ -81,8 +92,30 @@ const startWorker = (emitFn = null) => {
     console.log(`[Worker] ✅ Job ${job.id} completed.`);
   });
 
-  worker.on('failed', (job, err) => {
-    console.error(`[Worker] ❌ Job ${job?.id} failed (attempt ${job?.attemptsMade}): ${err.message}`);
+  // Fires on every failed attempt. Only update to 'failed' when all retries exhausted.
+  worker.on('failed', async (job, err) => {
+    const attempt = job?.attemptsMade ?? 0;
+    console.error(`[Worker] ❌ Job ${job?.id} attempt ${attempt}/${RETRY_ATTEMPTS} failed: ${err.message}`);
+
+    if (job && attempt >= RETRY_ATTEMPTS) {
+      console.error(`[Worker] 💀 All retries exhausted for eventId: ${job.data.eventId}`);
+      try {
+        const failedDoc = await WebhookEvent.findOneAndUpdate(
+          { eventId: job.data.eventId },
+          { status: 'failed', processedAt: new Date() },
+          { new: true }
+        );
+        if (failedDoc && typeof emitFn === 'function') {
+          emitFn(
+            `project:${job.data.projectId}`,
+            'webhook:event:updated',
+            buildSocketPayload(failedDoc)
+          );
+        }
+      } catch (dbErr) {
+        console.error('[Worker] Failed to write failed status to DB:', dbErr.message);
+      }
+    }
   });
 
   worker.on('error', (err) => {
@@ -95,7 +128,7 @@ const startWorker = (emitFn = null) => {
 
 /**
  * Gracefully shuts down the active worker.
- * Waits for in-progress jobs to complete before exiting.
+ * Waits for in-progress jobs to finish before exiting.
  */
 const shutdownWorker = async () => {
   if (worker) {

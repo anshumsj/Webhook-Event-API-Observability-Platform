@@ -57,8 +57,7 @@ const ingestWebhook = async (req, res) => {
       console.error(`[${req.requestId}] Socket emit (created) failed:`, socketError.message);
     }
 
-    // 5. Enqueue the job for async processing.
-    //    The worker will update status → 'processed' and emit 'webhook:event:updated'.
+    // 5. Enqueue the job. On success, update event status → 'queued'.
     try {
       const queue = getWebhookQueue();
       await queue.add('process-webhook', {
@@ -69,10 +68,32 @@ const ingestWebhook = async (req, res) => {
                             : event.receivedAt,
         processingTimeMs: ingestTimeMs,
       });
-      console.log(`[${req.requestId}] Enqueued job for eventId: ${event.eventId}`);
+
+      // Update MongoDB status to 'queued'
+      await WebhookEvent.findOneAndUpdate({ eventId: event.eventId }, { status: 'queued' });
+
+      // Notify dashboard: received → queued
+      try {
+        const io = require('../socket').getIO();
+        io.to(`project:${event.projectId}`).emit('webhook:event:updated', {
+          _id:             String(event._id),
+          eventId:         event.eventId,
+          projectId:       String(event.projectId),
+          eventType:       event.eventType,
+          status:          'queued',
+          receivedAt:      event.receivedAt instanceof Date
+                             ? event.receivedAt.toISOString()
+                             : event.receivedAt,
+          processedAt:     null,
+          processingTimeMs: 0,
+        });
+      } catch (socketError) {
+        console.error(`[${req.requestId}] Socket emit (queued) failed:`, socketError.message);
+      }
+
+      console.log(`[${req.requestId}] Enqueued | eventId: ${event.eventId}`);
     } catch (queueError) {
-      // Queue failure is non-fatal — the event is already in MongoDB.
-      // It will stay in 'received' status until a retry mechanism handles it.
+      // Queue failure is non-fatal — event is in MongoDB at 'received'.
       console.error(`[${req.requestId}] Failed to enqueue job:`, queueError.message);
     }
 
@@ -122,11 +143,25 @@ const getEventsByProject = async (req, res) => {
     // 3. Paginate
     const skip = (page - 1) * limit;
     const total = await WebhookEvent.countDocuments({ projectId });
-    const events = await WebhookEvent.find({ projectId })
+    const rawEvents = await WebhookEvent.find({ projectId })
       .sort({ receivedAt: -1 })
       .skip(skip)
       .limit(limit);
-      
+
+    // Serialize to plain DTOs — same shape as the socket payload.
+    // Returning raw Mongoose docs causes _id to be an ObjectId object,
+    // which React rejects as a key and renders as "[object Object]".
+    const events = rawEvents.map(e => ({
+      _id:             String(e._id),
+      eventId:         e.eventId,
+      projectId:       String(e.projectId),
+      eventType:       e.eventType,
+      status:          e.status,
+      receivedAt:      e.receivedAt instanceof Date ? e.receivedAt.toISOString() : e.receivedAt,
+      processedAt:     e.processedAt instanceof Date ? e.processedAt.toISOString() : (e.processedAt || null),
+      processingTimeMs: e.processingTimeMs,
+    }));
+
     res.status(200).json({
       events,
       pagination: {

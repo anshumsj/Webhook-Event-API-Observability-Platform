@@ -2,6 +2,7 @@ const { Queue } = require('bullmq');
 const { getRedis } = require('../config/redis');
 
 const QUEUE_NAME = 'webhook-processing';
+const RETRY_ATTEMPTS = 3;
 
 let webhookQueue = null;
 
@@ -14,13 +15,13 @@ const getWebhookQueue = () => {
     webhookQueue = new Queue(QUEUE_NAME, {
       connection: getRedis(),
       defaultJobOptions: {
-        attempts: 3,                   // Retry failed jobs up to 3 times
+        attempts: RETRY_ATTEMPTS,
         backoff: {
           type: 'exponential',
           delay: 1000,                 // 1s, 2s, 4s
         },
-        removeOnComplete: { count: 500 }, // Keep last 500 completed jobs for inspection
-        removeOnFail:     { count: 100 }, // Keep last 100 failed jobs for debugging
+        removeOnComplete: { count: 500 },
+        removeOnFail:     { count: 100 },
       },
     });
 
@@ -31,4 +32,4 @@ const getWebhookQueue = () => {
   return webhookQueue;
 };
 
-module.exports = { getWebhookQueue, QUEUE_NAME };
+module.exports = { getWebhookQueue, QUEUE_NAME, RETRY_ATTEMPTS };
