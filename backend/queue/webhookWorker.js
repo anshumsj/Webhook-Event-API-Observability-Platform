@@ -143,7 +143,7 @@ const startWorker = (emitFn = null) => {
     console.log(`[Worker] ✅ Job ${job.id} completed.`);
   });
 
-  // Fires on every failed attempt. Only update to 'failed' when all retries exhausted.
+  // Fires on every failed attempt. Only update to 'retry_exhausted' when all retries exhausted.
   worker.on('failed', async (job, err) => {
     const attempt = job?.attemptsMade ?? 0;
     console.error(`[Worker] ❌ Job ${job?.id} attempt ${attempt}/${RETRY_ATTEMPTS} failed: ${err.message}`);
@@ -153,7 +153,7 @@ const startWorker = (emitFn = null) => {
       try {
         const failedDoc = await WebhookEvent.findOneAndUpdate(
           { eventId: job.data.eventId },
-          { status: 'failed', processedAt: new Date() },
+          { status: 'retry_exhausted', processedAt: new Date() },
           { new: true }
         );
         if (failedDoc && typeof emitFn === 'function') {

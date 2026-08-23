@@ -59,6 +59,7 @@ export default function EventDetails() {
       case 'processed':
         return <CheckCircle2 className="w-5 h-5 text-emerald-400" />;
       case 'failed':
+      case 'retry_exhausted':
         return <XCircle className="w-5 h-5 text-rose-400" />;
       case 'processing':
         return <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />;
@@ -74,6 +75,7 @@ export default function EventDetails() {
       case 'processed':
         return 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20';
       case 'failed':
+      case 'retry_exhausted':
         return 'bg-rose-400/10 text-rose-400 border-rose-400/20';
       case 'processing':
         return 'bg-violet-400/10 text-violet-400 border-violet-400/20';
