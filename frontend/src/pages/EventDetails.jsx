@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useSocket } from '../context/SocketContext';
-import { ArrowLeft, Clock, CheckCircle2, XCircle, Loader2, Database, Braces, AlignLeft, Box } from 'lucide-react';
+import { ArrowLeft, Clock, CheckCircle2, XCircle, Loader2, Database, Braces, AlignLeft, Box, Activity } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function EventDetails() {
@@ -191,6 +191,92 @@ export default function EventDetails() {
               </div>
             </div>
           </div>
+
+          {/* Delivery Attempts Timeline */}
+          {event.attempts && event.attempts.length > 0 && (
+            <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
+              <div className="px-6 py-4 border-b border-border flex items-center gap-2">
+                <Activity className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold text-text">Delivery Attempts</h3>
+              </div>
+              <div className="p-6 relative">
+                <div className="absolute left-[43px] top-8 bottom-8 w-px bg-border"></div>
+                <div className="space-y-6 relative z-10">
+                  {event.attempts.map((attempt) => {
+                    const isSuccess = attempt.status === 'success';
+                    const isFailed = attempt.status === 'failed' || attempt.status === 'timeout';
+                    
+                    let dotClass, icon;
+                    if (isSuccess) {
+                      dotClass = 'bg-emerald-400/20 border border-emerald-400/30';
+                      icon = <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
+                    } else if (isFailed) {
+                      dotClass = 'bg-rose-400/20 border border-rose-400/30';
+                      icon = <XCircle className="w-4 h-4 text-rose-400" />;
+                    } else {
+                      dotClass = 'bg-amber-400/20 border border-amber-400/30';
+                      icon = <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />;
+                    }
+
+                    return (
+                      <div key={attempt.attemptNumber} className="flex items-start gap-4">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${dotClass} mt-1 relative z-10`}>
+                          {icon}
+                        </div>
+                        <div className="flex-1 bg-background border border-border rounded-lg p-4">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2">
+                            <h4 className={`font-semibold text-base flex items-center gap-2 ${isSuccess ? 'text-emerald-400' : isFailed ? 'text-rose-400' : 'text-amber-400'}`}>
+                              Attempt {attempt.attemptNumber}
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 border border-white/10 uppercase tracking-wider text-muted">
+                                {attempt.status}
+                              </span>
+                            </h4>
+                            <div className="text-left sm:text-right text-xs text-muted font-mono flex flex-row sm:flex-col gap-3 sm:gap-0">
+                              <div>{format(new Date(attempt.startedAt), 'MMM d, HH:mm:ss.SSS')}</div>
+                              {attempt.latencyMs != null && <div>{attempt.latencyMs} ms</div>}
+                            </div>
+                          </div>
+                          
+                          {attempt.responseStatusCode != null && (
+                            <div className="text-sm mb-2">
+                              <span className="text-muted font-semibold mr-2">HTTP Status:</span>
+                              <span className={attempt.responseStatusCode >= 200 && attempt.responseStatusCode < 300 ? 'text-emerald-400 font-mono font-bold' : 'text-rose-400 font-mono font-bold'}>
+                                {attempt.responseStatusCode}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {attempt.errorMessage && (
+                            <div className="text-sm mb-3">
+                              <span className="text-muted font-semibold block mb-1">Error Message:</span>
+                              <span className="text-rose-400 font-mono text-xs block bg-rose-400/5 p-2 rounded border border-rose-400/10 break-all">{attempt.errorMessage}</span>
+                            </div>
+                          )}
+
+                          {attempt.responseBody && (
+                            <div className="mt-3">
+                              <span className="text-muted text-xs font-semibold uppercase mb-1 block">Response Body</span>
+                              <pre className="text-xs font-mono text-muted bg-surface p-3 rounded border border-border whitespace-pre-wrap break-all max-h-48 overflow-y-auto">
+                                {attempt.responseBody}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {event.attempts && event.attempts.length === 0 && (
+            <div className="bg-surface border border-border rounded-xl p-8 text-center shadow-sm">
+               <Clock className="w-8 h-8 text-muted mx-auto mb-3" />
+               <h3 className="text-text font-semibold mb-1">No Delivery Attempts Yet</h3>
+               <p className="text-sm text-muted">This event is waiting to be processed or is currently in the queue.</p>
+            </div>
+          )}
         </div>
 
         {/* Right Column (Metadata & Timeline) */}
