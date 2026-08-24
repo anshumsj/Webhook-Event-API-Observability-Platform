@@ -142,10 +142,43 @@ const getEventsByProject = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to access events for this project' });
     }
     
-    // 3. Paginate
+    // 3. Build dynamic query
+    const { status, endpointId, eventType, from, to } = req.query;
+    const query = { projectId };
+
+    if (status) query.status = status;
+    if (eventType) query.eventType = eventType;
+
+    if (endpointId) {
+      const mongoose = require('mongoose');
+      if (!mongoose.Types.ObjectId.isValid(endpointId)) {
+        return res.status(400).json({ message: 'Invalid endpointId format' });
+      }
+      query.endpointId = endpointId;
+    }
+
+    if (from || to) {
+      query.receivedAt = {};
+      if (from) {
+        const fromDate = new Date(from);
+        if (isNaN(fromDate.getTime())) {
+          return res.status(400).json({ message: 'Invalid "from" date format' });
+        }
+        query.receivedAt.$gte = fromDate;
+      }
+      if (to) {
+        const toDate = new Date(to);
+        if (isNaN(toDate.getTime())) {
+          return res.status(400).json({ message: 'Invalid "to" date format' });
+        }
+        query.receivedAt.$lte = toDate;
+      }
+    }
+
+    // 4. Paginate and Query
     const skip = (page - 1) * limit;
-    const total = await WebhookEvent.countDocuments({ projectId });
-    const rawEvents = await WebhookEvent.find({ projectId })
+    const total = await WebhookEvent.countDocuments(query);
+    const rawEvents = await WebhookEvent.find(query)
       .sort({ receivedAt: -1 })
       .skip(skip)
       .limit(limit);
