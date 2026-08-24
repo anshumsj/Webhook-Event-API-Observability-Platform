@@ -40,6 +40,7 @@ app.use('/api/projects', require('./routes/projectRoutes'));
 app.use('/api/webhooks', require('./routes/webhookRoutes'));
 app.use('/api/events', require('./routes/eventRoutes'));
 app.use('/api/endpoints', require('./routes/endpointRoutes'));
+app.use('/api/analytics', require('./routes/analyticsRoutes'));
 
 // Health check route
 app.get('/api/health', (req, res) => {
