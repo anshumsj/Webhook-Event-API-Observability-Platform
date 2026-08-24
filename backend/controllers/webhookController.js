@@ -123,8 +123,12 @@ const ingestWebhook = async (req, res) => {
 const getEventsByProject = async (req, res) => {
   try {
     const { projectId } = req.params;
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
+    let page = parseInt(req.query.page, 10);
+    if (isNaN(page) || page < 1) page = 1;
+
+    let limit = parseInt(req.query.limit, 10);
+    if (isNaN(limit) || limit < 1) limit = 20;
+    if (limit > 100) limit = 100;
     
     // 1. Verify project exists
     const project = await Project.findById(projectId);
@@ -143,7 +147,7 @@ const getEventsByProject = async (req, res) => {
     }
     
     // 3. Build dynamic query
-    const { status, endpointId, eventType, from, to } = req.query;
+    const { status, endpointId, eventType, from, to, search } = req.query;
     const query = { projectId };
 
     if (status) query.status = status;
@@ -175,11 +179,20 @@ const getEventsByProject = async (req, res) => {
       }
     }
 
+    if (search) {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.$or = [
+        { eventId: { $regex: escapedSearch, $options: 'i' } },
+        { eventType: { $regex: escapedSearch, $options: 'i' } },
+        { requestId: { $regex: escapedSearch, $options: 'i' } }
+      ];
+    }
+
     // 4. Paginate and Query
     const skip = (page - 1) * limit;
     const total = await WebhookEvent.countDocuments(query);
     const rawEvents = await WebhookEvent.find(query)
-      .sort({ receivedAt: -1 })
+      .sort({ receivedAt: -1, _id: -1 })
       .skip(skip)
       .limit(limit);
 
