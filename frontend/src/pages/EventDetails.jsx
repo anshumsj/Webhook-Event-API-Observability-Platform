@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import { useSocket } from '../context/SocketContext';
 import { ArrowLeft, Clock, CheckCircle2, XCircle, Loader2, Database, Braces, AlignLeft, Box, Activity } from 'lucide-react';
@@ -8,10 +8,16 @@ import { format } from 'date-fns';
 export default function EventDetails() {
   const { eventId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { socket } = useSocket();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const handleBack = () => {
+    const searchString = location.state?.search ? `?${location.state.search}` : '';
+    navigate(`/events${searchString}`);
+  };
 
   useEffect(() => {
     const fetchEventDetails = async () => {
@@ -107,7 +113,7 @@ export default function EventDetails() {
             {error || "We couldn't find this event. It may have been deleted, or you don't have permission to view it."}
           </p>
           <button 
-            onClick={() => navigate('/events')}
+            onClick={handleBack}
             className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-primary/90 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -139,7 +145,7 @@ export default function EventDetails() {
       {/* Header */}
       <div className="flex items-center gap-4">
         <button 
-          onClick={() => navigate('/events')}
+          onClick={handleBack}
           className="p-2 bg-surface border border-border rounded-lg text-muted hover:text-text hover:bg-white/5 transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />

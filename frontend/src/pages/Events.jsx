@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useSocket } from '../context/SocketContext';
 import api from '../services/api';
@@ -10,11 +10,16 @@ export default function Events() {
   const { activeWorkspace } = useWorkspace();
   const { socket } = useSocket();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const urlPage = parseInt(searchParams.get('page'), 10) || 1;
+  const urlProject = searchParams.get('project') || '';
+
   const [projects, setProjects] = useState([]);
-  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(urlProject);
 
   const [events, setEvents] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, limit: 2, total: 0, totalPages: 0 });
+  const [pagination, setPagination] = useState({ page: urlPage, limit: 2, total: 0, totalPages: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [newEventsCount, setNewEventsCount] = useState(0);
@@ -34,12 +39,12 @@ export default function Events() {
   // 2. Fetch events when selected project or page changes
   useEffect(() => {
     if (selectedProjectId) {
-      fetchEvents(1); // Reset to page 1 on project change
+      fetchEvents(pagination.page);
       setNewEventsCount(0);
     } else {
       setEvents([]);
     }
-  }, [selectedProjectId]);
+  }, [selectedProjectId, pagination.page]);
 
   // Ref that always reflects the latest pagination state — never stale inside a closure.
   const paginationRef = useRef(pagination);
@@ -121,9 +126,15 @@ export default function Events() {
       const res = await api.get(`/projects/${activeWorkspace._id}`);
       setProjects(res.data);
       if (res.data.length > 0) {
-        if (!selectedProjectId || !res.data.find(p => p._id === selectedProjectId)) {
-          setSelectedProjectId(res.data[0]._id);
-        }
+        setSelectedProjectId(current => {
+          if (!current || !res.data.find(p => p._id === current)) {
+            const defaultId = res.data[0]._id;
+            setSearchParams({ project: defaultId, page: 1 });
+            setPagination(prev => ({ ...prev, page: 1 }));
+            return defaultId;
+          }
+          return current;
+        });
       } else {
         setSelectedProjectId('');
       }
@@ -157,7 +168,7 @@ export default function Events() {
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= pagination.totalPages) {
       setPagination(prev => ({ ...prev, page: newPage }));
-      fetchEvents(newPage);
+      setSearchParams({ project: selectedProjectId, page: newPage });
     }
   };
 
@@ -212,7 +223,12 @@ export default function Events() {
           <select
             className="bg-background border border-border text-text text-sm rounded-lg focus:ring-primary focus:border-primary block p-2 transition-colors"
             value={selectedProjectId}
-            onChange={(e) => setSelectedProjectId(e.target.value)}
+            onChange={(e) => {
+              const newProject = e.target.value;
+              setSelectedProjectId(newProject);
+              setPagination(prev => ({ ...prev, page: 1 }));
+              setSearchParams({ project: newProject, page: 1 });
+            }}
             disabled={projects.length === 0}
           >
             {projects.length === 0 ? (
@@ -292,7 +308,7 @@ export default function Events() {
                 {events.map((event) => (
                   <tr
                     key={event._id || event.eventId}
-                    onClick={() => navigate(`/events/${event.eventId}`)}
+                    onClick={() => navigate(`/events/${event.eventId}`, { state: { search: searchParams.toString() } })}
                     className="hover:bg-white/5 transition-colors group cursor-pointer"
                   >
                     <td className="px-6 py-4 font-mono text-xs text-muted group-hover:text-primary transition-colors">

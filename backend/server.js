@@ -37,6 +37,10 @@ app.use((err, req, res, next) => {
     console.error(`[${req.requestId || 'sys'}] Malformed JSON request: ${err.message}`);
     return res.status(400).json({ success: false, message: 'Invalid JSON payload' });
   }
+  // Catch oversized JSON requests
+  if (err.type === 'entity.too.large' && err.status === 413) {
+    return res.status(413).json({ success: false, message: 'Payload too large' });
+  }
   next(err);
 });
 app.use(requestIdMiddleware); // Attach req.requestId to all requests
