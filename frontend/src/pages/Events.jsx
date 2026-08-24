@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useSocket } from '../context/SocketContext';
 import api from '../services/api';
-import { Activity, Clock, CheckCircle2, XCircle, Loader2, ChevronLeft, ChevronRight, FolderKanban, ArrowUp } from 'lucide-react';
+import { Activity, Clock, CheckCircle2, XCircle, Loader2, ChevronLeft, ChevronRight, FolderKanban, ArrowUp, Search, Filter, X } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Events() {
@@ -19,10 +19,33 @@ export default function Events() {
   const [selectedProjectId, setSelectedProjectId] = useState(urlProject);
 
   const [events, setEvents] = useState([]);
-  const [pagination, setPagination] = useState({ page: urlPage, limit: 2, total: 0, totalPages: 0 });
+  const [pagination, setPagination] = useState({ page: urlPage, limit: 20, total: 0, totalPages: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [newEventsCount, setNewEventsCount] = useState(0);
+
+  // Filters State
+  const [statusFilter, setStatusFilter] = useState('');
+  const [endpointFilter, setEndpointFilter] = useState('');
+  const [eventTypeFilter, setEventTypeFilter] = useState('');
+  const [timeRangeFilter, setTimeRangeFilter] = useState('All');
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Dropdown options
+  const [endpoints, setEndpoints] = useState([]);
+  const [eventTypes, setEventTypes] = useState([]);
+
+  // Debounce Search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+      if (searchInput !== debouncedSearch) {
+        setPagination(prev => ({ ...prev, page: 1 }));
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   // 1. Fetch projects when workspace changes
   useEffect(() => {
@@ -39,12 +62,15 @@ export default function Events() {
   // 2. Fetch events when selected project or page changes
   useEffect(() => {
     if (selectedProjectId) {
+      fetchFilterOptions(selectedProjectId);
       fetchEvents(pagination.page);
       setNewEventsCount(0);
     } else {
       setEvents([]);
+      setEndpoints([]);
+      setEventTypes([]);
     }
-  }, [selectedProjectId, pagination.page]);
+  }, [selectedProjectId, pagination.page, statusFilter, endpointFilter, eventTypeFilter, timeRangeFilter, debouncedSearch]);
 
   // Ref that always reflects the latest pagination state — never stale inside a closure.
   const paginationRef = useRef(pagination);
@@ -143,13 +169,43 @@ export default function Events() {
     }
   };
 
+  const fetchFilterOptions = async (projectId) => {
+    try {
+      const [epRes, typeRes] = await Promise.all([
+        api.get(`/endpoints/project/${projectId}`),
+        api.get(`/events/project/${projectId}/types`)
+      ]);
+      setEndpoints(epRes.data);
+      setEventTypes(typeRes.data);
+    } catch (err) {
+      console.error('Failed to fetch filter options', err);
+    }
+  };
+
   const fetchEvents = async (pageToFetch = pagination.page) => {
     if (!selectedProjectId) return;
 
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get(`/events/project/${selectedProjectId}?page=${pageToFetch}&limit=${pagination.limit}`);
+      const params = new URLSearchParams({ page: pageToFetch, limit: pagination.limit });
+
+      if (statusFilter) params.append('status', statusFilter);
+      if (endpointFilter) params.append('endpointId', endpointFilter);
+      if (eventTypeFilter) params.append('eventType', eventTypeFilter);
+      if (debouncedSearch) params.append('search', debouncedSearch);
+
+      if (timeRangeFilter && timeRangeFilter !== 'All') {
+        const now = new Date();
+        let from = new Date();
+        if (timeRangeFilter === '24h') from.setHours(from.getHours() - 24);
+        else if (timeRangeFilter === '7d') from.setDate(from.getDate() - 7);
+        else if (timeRangeFilter === '30d') from.setDate(from.getDate() - 30);
+        params.append('from', from.toISOString());
+        params.append('to', now.toISOString());
+      }
+
+      const res = await api.get(`/events/project/${selectedProjectId}?${params.toString()}`);
       setEvents(res.data.events);
       setPagination(res.data.pagination);
 
@@ -251,6 +307,86 @@ export default function Events() {
         </div>
       </div>
 
+      {/* Filter Bar */}
+      {selectedProjectId && (
+        <div className="bg-surface border border-border rounded-xl p-4 shadow-sm flex flex-col md:flex-row gap-4 items-center flex-wrap">
+          <div className="flex-1 min-w-[200px] relative">
+            <Search className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search Event ID, Request ID, Type..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 bg-background border border-border rounded-lg text-sm text-text focus:outline-none focus:border-primary transition-colors"
+            />
+          </div>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }}
+            className="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary text-text"
+          >
+            <option value="">All Statuses</option>
+            <option value="processed">Successful</option>
+            <option value="failed">Failed</option>
+            <option value="pending">Pending</option>
+            <option value="retry_exhausted">Dead Lettered</option>
+          </select>
+
+          <select
+            value={endpointFilter}
+            onChange={(e) => { setEndpointFilter(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }}
+            className="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary text-text max-w-[200px]"
+          >
+            <option value="">All Endpoints</option>
+            {endpoints.map(ep => (
+              <option key={ep._id} value={ep._id}>
+                {new URL(ep.destinationUrl).hostname}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={eventTypeFilter}
+            onChange={(e) => { setEventTypeFilter(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }}
+            className="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary text-text max-w-[200px]"
+          >
+            <option value="">All Event Types</option>
+            {eventTypes.map(et => (
+              <option key={et} value={et}>{et}</option>
+            ))}
+          </select>
+
+          <select
+            value={timeRangeFilter}
+            onChange={(e) => { setTimeRangeFilter(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }}
+            className="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary text-text"
+          >
+            <option value="All">All Time</option>
+            <option value="24h">Last 24 Hours</option>
+            <option value="7d">Last 7 Days</option>
+            <option value="30d">Last 30 Days</option>
+          </select>
+
+          {(statusFilter || endpointFilter || eventTypeFilter || timeRangeFilter !== 'All' || searchInput) && (
+            <button
+              onClick={() => {
+                setStatusFilter('');
+                setEndpointFilter('');
+                setEventTypeFilter('');
+                setTimeRangeFilter('All');
+                setSearchInput('');
+                setPagination(prev => ({ ...prev, page: 1 }));
+              }}
+              className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors bg-primary/10 px-3 py-2 rounded-lg font-medium"
+            >
+              <X className="w-3.5 h-3.5" />
+              Clear Filters
+            </button>
+          )}
+        </div>
+      )}
+
       {error && (
         <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-4 rounded-xl">
           {error}
@@ -286,10 +422,10 @@ export default function Events() {
       ) : events.length === 0 ? (
         <div className="border-2 border-dashed border-border rounded-xl p-12 flex flex-col items-center justify-center text-center mt-6">
           <div className="w-12 h-12 bg-surface rounded-full flex items-center justify-center mb-4">
-            <Activity className="w-6 h-6 text-muted" />
+            <Filter className="w-6 h-6 text-muted" />
           </div>
-          <h3 className="text-lg font-medium text-text mb-1">No events found</h3>
-          <p className="text-muted mb-4 max-w-sm">Events will appear here once webhooks are received by this project's endpoints.</p>
+          <h3 className="text-lg font-medium text-text mb-1">No deliveries match your current filters.</h3>
+          <p className="text-muted mb-4 max-w-sm">Try adjusting or clearing your filters to see more events.</p>
         </div>
       ) : (
         <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm flex flex-col">

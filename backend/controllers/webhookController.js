@@ -159,6 +159,12 @@ const getEventsByProject = async (req, res) => {
       if (!mongoose.Types.ObjectId.isValid(endpointId)) {
         return res.status(400).json({ message: 'Invalid endpointId format' });
       }
+      
+      const endpointExists = await WebhookEndpoint.findOne({ _id: endpointId, projectId });
+      if (!endpointExists) {
+        return res.status(403).json({ message: 'Endpoint does not belong to this project' });
+      }
+      
       query.endpointId = endpointId;
     }
 
@@ -302,8 +308,31 @@ const getEventById = async (req, res) => {
   }
 };
 
+const getProjectEventTypes = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+
+    const project = await Project.findById(projectId);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+
+    const workspace = await Workspace.findOne({
+      _id: project.workspaceId,
+      $or: [{ owner: req.user.id }, { members: req.user.id }]
+    });
+
+    if (!workspace) return res.status(403).json({ message: 'Not authorized' });
+
+    const types = await WebhookEvent.distinct('eventType', { projectId });
+    res.status(200).json(types);
+  } catch (error) {
+    console.error('Error fetching event types:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   ingestWebhook,
   getEventsByProject,
-  getEventById
+  getEventById,
+  getProjectEventTypes
 };

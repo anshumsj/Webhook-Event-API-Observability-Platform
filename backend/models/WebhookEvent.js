@@ -7,8 +7,7 @@ const webhookEventSchema = new mongoose.Schema({
   projectId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Project',
-    required: [true, 'Project ID is required'],
-    index: true
+    required: [true, 'Project ID is required']
   },
   endpointId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -59,6 +58,9 @@ const webhookEventSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
+// Compound index for optimal event listing & pagination
+webhookEventSchema.index({ projectId: 1, receivedAt: -1, _id: -1 });
 
 const WebhookEvent = mongoose.model('WebhookEvent', webhookEventSchema);
 
