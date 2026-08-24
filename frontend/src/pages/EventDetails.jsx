@@ -140,6 +140,34 @@ export default function EventDetails() {
     );
   };
 
+  // Derived Metrics
+  const totalAttempts = event.attempts?.length || 0;
+  const retries = Math.max(0, totalAttempts - 1);
+  
+  let finalStatusDisplay = 'Pending';
+  if (event.status === 'processed') finalStatusDisplay = 'Delivered';
+  else if (event.status === 'failed') finalStatusDisplay = 'Failed';
+  else if (event.status === 'retry_exhausted') finalStatusDisplay = 'Dead Lettered';
+  
+  let totalDurationDisplay = 'In Progress';
+  if (event.status === 'processed' || event.status === 'failed' || event.status === 'retry_exhausted') {
+    const start = new Date(event.receivedAt).getTime();
+    let end = event.processedAt ? new Date(event.processedAt).getTime() : null;
+    
+    if (totalAttempts > 0) {
+      const lastAttempt = event.attempts[totalAttempts - 1];
+      if (lastAttempt.completedAt) {
+        end = new Date(lastAttempt.completedAt).getTime();
+      }
+    }
+    
+    if (end && !isNaN(end) && !isNaN(start)) {
+      const ms = end - start;
+      if (ms < 1000) totalDurationDisplay = `${ms} ms`;
+      else totalDurationDisplay = `${(ms / 1000).toFixed(2)} s`;
+    }
+  }
+
   return (
     <div className="space-y-6 max-w-5xl">
       {/* Header */}
@@ -165,6 +193,34 @@ export default function EventDetails() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column (Main Data) */}
         <div className="lg:col-span-2 space-y-6">
+
+          {/* Delivery Summary Block */}
+          {event.attempts && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+               <div className="bg-surface border border-border rounded-xl p-4 shadow-sm">
+                 <p className="text-xs text-muted uppercase font-semibold mb-1">Total Attempts</p>
+                 <p className="text-xl font-bold text-text">{totalAttempts}</p>
+               </div>
+               <div className="bg-surface border border-border rounded-xl p-4 shadow-sm">
+                 <p className="text-xs text-muted uppercase font-semibold mb-1">Retries</p>
+                 <p className="text-xl font-bold text-text">{retries}</p>
+               </div>
+               <div className="bg-surface border border-border rounded-xl p-4 shadow-sm">
+                 <p className="text-xs text-muted uppercase font-semibold mb-1">Final Status</p>
+                 <p className={`text-base font-bold ${
+                    finalStatusDisplay === 'Delivered' ? 'text-emerald-400' :
+                    finalStatusDisplay === 'Dead Lettered' ? 'text-rose-400' :
+                    finalStatusDisplay === 'Failed' ? 'text-rose-400' :
+                    'text-amber-400'
+                 }`}>{finalStatusDisplay}</p>
+               </div>
+               <div className="bg-surface border border-border rounded-xl p-4 shadow-sm">
+                 <p className="text-xs text-muted uppercase font-semibold mb-1">Total Duration</p>
+                 <p className="text-xl font-bold text-text">{totalDurationDisplay}</p>
+               </div>
+            </div>
+          )}
+
           {/* Payload Section */}
           <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
             <div className="px-6 py-4 border-b border-border flex items-center gap-2">
@@ -208,7 +264,7 @@ export default function EventDetails() {
               <div className="p-6 relative">
                 <div className="absolute left-[43px] top-8 bottom-8 w-px bg-border"></div>
                 <div className="space-y-6 relative z-10">
-                  {event.attempts.map((attempt) => {
+                  {event.attempts.map((attempt, index) => {
                     const isSuccess = attempt.status === 'success';
                     const isFailed = attempt.status === 'failed' || attempt.status === 'timeout';
                     
@@ -225,50 +281,75 @@ export default function EventDetails() {
                     }
 
                     return (
-                      <div key={attempt.attemptNumber} className="flex items-start gap-4">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${dotClass} mt-1 relative z-10`}>
-                          {icon}
-                        </div>
-                        <div className="flex-1 bg-background border border-border rounded-lg p-4">
-                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2">
-                            <h4 className={`font-semibold text-base flex items-center gap-2 ${isSuccess ? 'text-emerald-400' : isFailed ? 'text-rose-400' : 'text-amber-400'}`}>
-                              Attempt {attempt.attemptNumber}
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 border border-white/10 uppercase tracking-wider text-muted">
-                                {attempt.status}
-                              </span>
-                            </h4>
-                            <div className="text-left sm:text-right text-xs text-muted font-mono flex flex-row sm:flex-col gap-3 sm:gap-0">
-                              <div>{format(new Date(attempt.startedAt), 'MMM d, HH:mm:ss.SSS')}</div>
-                              {attempt.latencyMs != null && <div>{attempt.latencyMs} ms</div>}
-                            </div>
+                      <React.Fragment key={attempt.attemptNumber}>
+                        <div className="flex items-start gap-4">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${dotClass} mt-1 relative z-10`}>
+                            {icon}
                           </div>
-                          
-                          {attempt.responseStatusCode != null && (
-                            <div className="text-sm mb-2">
-                              <span className="text-muted font-semibold mr-2">HTTP Status:</span>
-                              <span className={attempt.responseStatusCode >= 200 && attempt.responseStatusCode < 300 ? 'text-emerald-400 font-mono font-bold' : 'text-rose-400 font-mono font-bold'}>
-                                {attempt.responseStatusCode}
-                              </span>
+                          <div className="flex-1 bg-background border border-border rounded-lg p-4 shadow-sm hover:border-primary/30 transition-colors">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2">
+                              <h4 className={`font-semibold text-base flex items-center gap-2 ${isSuccess ? 'text-emerald-400' : isFailed ? 'text-rose-400' : 'text-amber-400'}`}>
+                                Attempt #{attempt.attemptNumber}
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 border border-white/10 uppercase tracking-wider text-muted">
+                                  {attempt.status}
+                                </span>
+                              </h4>
+                              <div className="text-left sm:text-right text-xs text-muted font-mono flex flex-row sm:flex-col gap-3 sm:gap-0">
+                                <div>{format(new Date(attempt.startedAt), 'MMM d, HH:mm:ss.SSS')}</div>
+                                {attempt.latencyMs != null && <div>{attempt.latencyMs} ms</div>}
+                              </div>
                             </div>
-                          )}
-                          
-                          {attempt.errorMessage && (
-                            <div className="text-sm mb-3">
-                              <span className="text-muted font-semibold block mb-1">Error Message:</span>
-                              <span className="text-rose-400 font-mono text-xs block bg-rose-400/5 p-2 rounded border border-rose-400/10 break-all">{attempt.errorMessage}</span>
-                            </div>
-                          )}
+                            
+                            {attempt.responseStatusCode != null && (
+                              <div className="text-sm mb-2">
+                                <span className="text-muted font-semibold mr-2">HTTP Status:</span>
+                                <span className={attempt.responseStatusCode >= 200 && attempt.responseStatusCode < 300 ? 'text-emerald-400 font-mono font-bold' : 'text-rose-400 font-mono font-bold'}>
+                                  {attempt.responseStatusCode}
+                                </span>
+                              </div>
+                            )}
+                            
+                            {attempt.errorMessage && (
+                              <div className="text-sm mb-3">
+                                <span className="text-muted font-semibold block mb-1">Error Message:</span>
+                                <span className="text-rose-400 font-mono text-xs block bg-rose-400/5 p-2 rounded border border-rose-400/10 break-all">{attempt.errorMessage}</span>
+                              </div>
+                            )}
 
-                          {attempt.responseBody && (
-                            <div className="mt-3">
-                              <span className="text-muted text-xs font-semibold uppercase mb-1 block">Response Body</span>
-                              <pre className="text-xs font-mono text-muted bg-surface p-3 rounded border border-border whitespace-pre-wrap break-all max-h-48 overflow-y-auto">
-                                {attempt.responseBody}
-                              </pre>
-                            </div>
-                          )}
+                            {attempt.responseBody && (
+                              <div className="mt-3">
+                                <span className="text-muted text-xs font-semibold uppercase mb-1 block">Response Body</span>
+                                <pre className="text-xs font-mono text-muted bg-surface p-3 rounded border border-border whitespace-pre-wrap break-all max-h-48 overflow-y-auto">
+                                  {attempt.responseBody}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
+
+                        {/* Visual Connector for Retry */}
+                        {index < event.attempts.length - 1 && (
+                          <div className="flex relative z-10 py-2" style={{ marginLeft: '12px' }}>
+                            <span className="text-[10px] uppercase font-bold tracking-wider text-muted bg-surface px-2 py-1 rounded border border-border z-20 shadow-sm flex items-center gap-1.5">
+                              ↓ Retry
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Terminal Node for Success or DLQ */}
+                        {index === event.attempts.length - 1 && (event.status === 'processed' || event.status === 'retry_exhausted') && (
+                          <div className="flex relative z-10 pt-4 pb-2" style={{ marginLeft: '-15px' }}>
+                             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold uppercase tracking-wider bg-surface z-20 shadow-sm ${
+                               event.status === 'processed' 
+                               ? 'text-emerald-400 border-emerald-400/30' 
+                               : 'text-rose-400 border-rose-400/30'
+                             }`}>
+                               {event.status === 'processed' ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                               {event.status === 'processed' ? 'Delivered' : 'Retry Exhausted / Dead Lettered'}
+                             </div>
+                          </div>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </div>
