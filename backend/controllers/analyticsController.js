@@ -87,8 +87,34 @@ const getWorkspaceAnalytics = async (req, res) => {
   }
 };
 
+const getWorkspaceEndpointHealth = async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    const { timeRange } = req.query;
+
+    // 1. Authorize via workspace
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      $or: [{ owner: req.user.id }, { members: req.user.id }]
+    });
+
+    if (!workspace) {
+      return res.status(403).json({ message: 'Not authorized to access endpoint health for this workspace' });
+    }
+
+    // 2. Fetch endpoint health
+    const health = await analyticsService.getWorkspaceEndpointHealth(workspaceId, timeRange);
+
+    res.status(200).json(health);
+  } catch (error) {
+    console.error('Error fetching workspace endpoint health:', error);
+    res.status(500).json({ message: 'Server error retrieving workspace endpoint health' });
+  }
+};
+
 module.exports = {
   getProjectAnalytics,
   getEndpointHealth,
-  getWorkspaceAnalytics
+  getWorkspaceAnalytics,
+  getWorkspaceEndpointHealth
 };

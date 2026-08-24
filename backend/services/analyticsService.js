@@ -5,6 +5,11 @@ const DeliveryAttempt = require('../models/DeliveryAttempt');
 
 const HEALTH_WINDOW_HOURS = 24;
 
+const HEALTHY_SUCCESS_RATE = 99;
+const DEGRADED_SUCCESS_RATE = 95;
+const HEALTHY_LATENCY_MS = 500;
+const DEGRADED_LATENCY_MS = 1000;
+
 const getProjectAnalytics = async (projectId) => {
   const objectId = new mongoose.Types.ObjectId(projectId);
 
@@ -255,8 +260,137 @@ const getWorkspaceAnalytics = async (workspaceId, timeRange = '24h') => {
   };
 };
 
+const getWorkspaceEndpointHealth = async (workspaceId, timeRange = '24h') => {
+  const objectId = new mongoose.Types.ObjectId(workspaceId);
+
+  // 1. Calculate time boundary
+  let since = new Date();
+  if (timeRange === '7d') since.setDate(since.getDate() - 7);
+  else if (timeRange === '30d') since.setDate(since.getDate() - 30);
+  else since.setHours(since.getHours() - 24);
+
+  // 2. Find projects for this workspace
+  const Project = require('../models/Project');
+  const projects = await Project.find({ workspaceId: objectId }).select('_id');
+  const projectIds = projects.map(p => p._id);
+
+  if (projectIds.length === 0) return { timeRange, endpoints: [] };
+
+  // 3. Find endpoints for these projects
+  const endpoints = await WebhookEndpoint.find({ projectId: { $in: projectIds } }).select('_id endpointId destinationUrl');
+  if (endpoints.length === 0) return { timeRange, endpoints: [] };
+
+  const endpointIds = endpoints.map(ep => ep._id);
+
+  // 4. Aggregate WebhookEvents matching the time boundary
+  const eventAgg = await WebhookEvent.aggregate([
+    { $match: { projectId: { $in: projectIds }, receivedAt: { $gte: since } } },
+    { $group: {
+        _id: "$endpointId",
+        totalDeliveries: { $sum: 1 },
+        successfulDeliveries: { $sum: { $cond: [{ $eq: ["$status", "processed"] }, 1, 0] } },
+        failedDeliveries: { $sum: { $cond: [{ $eq: ["$status", "failed"] }, 1, 0] } },
+        deadLettered: { $sum: { $cond: [{ $eq: ["$status", "retry_exhausted"] }, 1, 0] } },
+        eventIds: { $push: "$_id" }
+    }}
+  ]);
+
+  const eventMap = {};
+  const allEventIds = [];
+  for (const stat of eventAgg) {
+    eventMap[String(stat._id)] = stat;
+    allEventIds.push(...stat.eventIds);
+  }
+
+  // 5. Aggregate DeliveryAttempts matching EXACT event population
+  const attemptMap = {};
+  if (allEventIds.length > 0) {
+    const attemptAgg = await DeliveryAttempt.aggregate([
+      { $match: { webhookEventId: { $in: allEventIds } } },
+      { $group: {
+          _id: { endpointId: "$endpointId", eventId: "$webhookEventId" },
+          attemptCount: { $sum: 1 },
+          avgLatency: { $avg: "$latencyMs" }
+      }},
+      { $group: {
+          _id: "$_id.endpointId",
+          retryCount: { $sum: { $cond: [{ $gt: ["$attemptCount", 1] }, 1, 0] } },
+          latencySum: { $sum: { $cond: [{ $ne: ["$avgLatency", null] }, "$avgLatency", 0] } },
+          latencyCount: { $sum: { $cond: [{ $ne: ["$avgLatency", null] }, 1, 0] } }
+      }}
+    ]);
+
+    for (const stat of attemptAgg) {
+      attemptMap[String(stat._id)] = stat;
+    }
+  }
+
+  // 6. Format and Classify Health
+  const results = endpoints.map(ep => {
+    const epIdStr = String(ep._id);
+    const eStats = eventMap[epIdStr] || { totalDeliveries: 0, successfulDeliveries: 0, failedDeliveries: 0, deadLettered: 0 };
+    const aStats = attemptMap[epIdStr] || { retryCount: 0, latencySum: 0, latencyCount: 0 };
+
+    if (eStats.totalDeliveries === 0) {
+      return {
+        _id: epIdStr,
+        endpointId: ep.endpointId,
+        destinationUrl: ep.destinationUrl,
+        health: 'no_data',
+        totalDeliveries: 0,
+        successfulDeliveries: 0,
+        failedDeliveries: 0,
+        deadLettered: 0,
+        successRate: 0,
+        retryRate: 0,
+        averageLatencyMs: 0
+      };
+    }
+
+    const successRate = (eStats.successfulDeliveries / eStats.totalDeliveries) * 100;
+    const retryRate = (aStats.retryCount / eStats.totalDeliveries) * 100;
+    const avgLatency = aStats.latencyCount > 0 ? (aStats.latencySum / aStats.latencyCount) : 0;
+
+    let health = 'healthy';
+    if (successRate < DEGRADED_SUCCESS_RATE || avgLatency >= DEGRADED_LATENCY_MS) {
+      health = 'unhealthy';
+    } else if (successRate < HEALTHY_SUCCESS_RATE || avgLatency >= HEALTHY_LATENCY_MS) {
+      health = 'degraded';
+    }
+
+    return {
+      _id: epIdStr,
+      endpointId: ep.endpointId,
+      destinationUrl: ep.destinationUrl,
+      health,
+      totalDeliveries: eStats.totalDeliveries,
+      successfulDeliveries: eStats.successfulDeliveries,
+      failedDeliveries: eStats.failedDeliveries,
+      deadLettered: eStats.deadLettered,
+      successRate: Math.round(successRate * 100) / 100,
+      retryRate: Math.round(retryRate * 100) / 100,
+      averageLatencyMs: Math.round(avgLatency)
+    };
+  });
+
+  // 7. Sort
+  const healthOrder = { unhealthy: 1, degraded: 2, healthy: 3, no_data: 4 };
+  results.sort((a, b) => {
+    if (healthOrder[a.health] !== healthOrder[b.health]) {
+      return healthOrder[a.health] - healthOrder[b.health];
+    }
+    if (a.failedDeliveries !== b.failedDeliveries) {
+      return b.failedDeliveries - a.failedDeliveries;
+    }
+    return a.successRate - b.successRate;
+  });
+
+  return { timeRange, endpoints: results };
+};
+
 module.exports = {
   getProjectAnalytics,
   getEndpointHealth,
-  getWorkspaceAnalytics
+  getWorkspaceAnalytics,
+  getWorkspaceEndpointHealth
 };
