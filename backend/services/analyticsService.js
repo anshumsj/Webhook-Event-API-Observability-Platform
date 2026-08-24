@@ -156,7 +156,107 @@ const getEndpointHealth = async (projectId) => {
   });
 };
 
+const getWorkspaceAnalytics = async (workspaceId, timeRange = '24h') => {
+  const objectId = new mongoose.Types.ObjectId(workspaceId);
+
+  // 1. Calculate time boundary
+  let since = new Date();
+  if (timeRange === '7d') {
+    since.setDate(since.getDate() - 7);
+  } else if (timeRange === '30d') {
+    since.setDate(since.getDate() - 30);
+  } else {
+    // Default 24h
+    since.setHours(since.getHours() - 24);
+  }
+
+  // 2. Find projects for this workspace
+  const Project = require('../models/Project');
+  const projects = await Project.find({ workspaceId: objectId }).select('_id');
+  const projectIds = projects.map(p => p._id);
+
+  if (projectIds.length === 0) {
+    return {
+      totalDeliveries: 0,
+      successfulDeliveries: 0,
+      failedDeliveries: 0,
+      successRate: 0,
+      retryRate: 0,
+      averageLatencyMs: 0,
+      deadLettered: 0,
+      timeRange
+    };
+  }
+
+  // 3. Aggregate WebhookEvents (use receivedAt for time window)
+  const eventAgg = await WebhookEvent.aggregate([
+    { $match: { projectId: { $in: projectIds }, receivedAt: { $gte: since } } },
+    { $group: {
+        _id: null,
+        totalDeliveries: { $sum: 1 },
+        successfulDeliveries: { $sum: { $cond: [{ $eq: ["$status", "processed"] }, 1, 0] } },
+        failedDeliveries: { $sum: { $cond: [{ $eq: ["$status", "failed"] }, 1, 0] } },
+        deadLettered: { $sum: { $cond: [{ $eq: ["$status", "retry_exhausted"] }, 1, 0] } },
+        eventIds: { $push: "$_id" } // Collect all event IDs for exact population match
+    }}
+  ]);
+
+  const eventStats = eventAgg[0] || {
+    totalDeliveries: 0,
+    successfulDeliveries: 0,
+    failedDeliveries: 0,
+    deadLettered: 0,
+    eventIds: []
+  };
+
+  let retriedEvents = 0;
+  let averageLatencyMs = 0;
+
+  // 4. Aggregate DeliveryAttempts matching the EXACT event population
+  if (eventStats.eventIds.length > 0) {
+    const attemptAgg = await DeliveryAttempt.aggregate([
+      { $match: { webhookEventId: { $in: eventStats.eventIds } } },
+      { $facet: {
+          retryStats: [
+            { $group: { _id: "$webhookEventId", maxAttempt: { $max: "$attemptNumber" } } },
+            { $match: { maxAttempt: { $gt: 1 } } },
+            { $count: "count" }
+          ],
+          latencyStats: [
+            { $match: { latencyMs: { $ne: null } } },
+            { $group: { _id: null, averageLatencyMs: { $avg: "$latencyMs" } } }
+          ]
+      }}
+    ]);
+
+    const attemptStats = attemptAgg[0];
+    retriedEvents = attemptStats?.retryStats?.[0]?.count || 0;
+    averageLatencyMs = attemptStats?.latencyStats?.[0]?.averageLatencyMs || 0;
+  }
+
+  // 5. Calculate rates safely
+  const successRate = eventStats.totalDeliveries > 0 
+    ? (eventStats.successfulDeliveries / eventStats.totalDeliveries) * 100 
+    : 0;
+
+  const retryRate = eventStats.totalDeliveries > 0 
+    ? (retriedEvents / eventStats.totalDeliveries) * 100 
+    : 0;
+
+  return {
+    totalDeliveries: eventStats.totalDeliveries,
+    successfulDeliveries: eventStats.successfulDeliveries,
+    failedDeliveries: eventStats.failedDeliveries,
+    successRate: Math.round(successRate * 100) / 100,
+    retryRate: Math.round(retryRate * 100) / 100,
+    averageLatencyMs: Math.round(averageLatencyMs),
+    deadLettered: eventStats.deadLettered,
+    timeRange
+  };
+};
+
 module.exports = {
   getProjectAnalytics,
-  getEndpointHealth
+  getEndpointHealth,
+  getWorkspaceAnalytics
 };
