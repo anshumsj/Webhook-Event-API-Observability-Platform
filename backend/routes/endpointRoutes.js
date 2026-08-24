@@ -5,5 +5,6 @@ const { protect } = require('../middleware/authMiddleware');
 
 router.get('/project/:projectId', protect, endpointController.getEndpointsByProject);
 router.post('/project/:projectId', protect, endpointController.createEndpoint);
+router.patch('/:endpointId', protect, endpointController.updateEndpoint);
 
 module.exports = router;
