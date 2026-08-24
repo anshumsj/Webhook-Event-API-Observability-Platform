@@ -3,6 +3,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { Activity, Webhook, FolderKanban, CheckCircle2, XCircle, Clock, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
+import TrendChart from '../components/TrendChart';
 
 const Home = () => {
   const { activeWorkspace, createWorkspace } = useWorkspace();
@@ -21,6 +22,7 @@ const Home = () => {
 
   const [analytics, setAnalytics] = useState(null);
   const [endpointHealth, setEndpointHealth] = useState(null);
+  const [trends, setTrends] = useState(null);
   const [timeRange, setTimeRange] = useState('24h');
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState('');
@@ -31,12 +33,14 @@ const Home = () => {
       setLoading(true);
       setFetchError('');
       try {
-        const [analyticsRes, healthRes] = await Promise.all([
+        const [analyticsRes, healthRes, trendsRes] = await Promise.all([
           api.get(`/analytics/workspace/${activeWorkspace._id}?timeRange=${timeRange}`),
-          api.get(`/analytics/workspace/${activeWorkspace._id}/endpoints?timeRange=${timeRange}`)
+          api.get(`/analytics/workspace/${activeWorkspace._id}/endpoints?timeRange=${timeRange}`),
+          api.get(`/analytics/workspace/${activeWorkspace._id}/trends?timeRange=${timeRange}`)
         ]);
         setAnalytics(analyticsRes.data);
         setEndpointHealth(healthRes.data);
+        setTrends(trendsRes.data);
       } catch (err) {
         setFetchError('Failed to load analytics.');
       } finally {
@@ -222,6 +226,23 @@ const Home = () => {
                 </div>
               </div>
             ) : null}
+          </div>
+          
+          <div className="pt-8 mt-4">
+             {loading ? (
+               <div className="h-80 w-full flex items-center justify-center text-muted bg-surface/50 border border-border/50 rounded-xl animate-pulse">
+                 Loading trends...
+               </div>
+             ) : fetchError ? (
+                null
+             ) : trends && trends.data && trends.data.length > 0 ? (
+                <TrendChart data={trends.data} timeRange={timeRange} />
+             ) : (
+                <div className="h-80 w-full flex flex-col items-center justify-center text-muted bg-surface border border-border rounded-xl">
+                  <Activity className="w-8 h-8 mb-3 opacity-50" />
+                  No delivery activity in this period.
+                </div>
+             )}
           </div>
 
           <div className="pt-8 border-t border-border mt-8">

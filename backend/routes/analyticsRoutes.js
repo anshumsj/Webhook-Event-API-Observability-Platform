@@ -7,5 +7,6 @@ router.get('/project/:projectId', protect, analyticsController.getProjectAnalyti
 router.get('/project/:projectId/endpoints', protect, analyticsController.getEndpointHealth);
 router.get('/workspace/:workspaceId', protect, analyticsController.getWorkspaceAnalytics);
 router.get('/workspace/:workspaceId/endpoints', protect, analyticsController.getWorkspaceEndpointHealth);
+router.get('/workspace/:workspaceId/trends', protect, analyticsController.getWorkspaceDeliveryTrends);
 
 module.exports = router;

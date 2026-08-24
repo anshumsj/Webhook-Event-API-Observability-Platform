@@ -388,9 +388,134 @@ const getWorkspaceEndpointHealth = async (workspaceId, timeRange = '24h') => {
   return { timeRange, endpoints: results };
 };
 
+const getWorkspaceDeliveryTrends = async (workspaceId, timeRange = '24h') => {
+  const objectId = new mongoose.Types.ObjectId(workspaceId);
+
+  // 1. Calculate time boundary and UTC buckets
+  const buckets = [];
+  const now = new Date();
+  let since;
+  let unit;
+
+  if (timeRange === '7d') {
+    unit = 'day';
+    const currentBucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(currentBucket);
+      d.setUTCDate(d.getUTCDate() - i);
+      buckets.push({
+        timestamp: d.toISOString(),
+        totalDeliveries: 0,
+        successfulDeliveries: 0,
+        failedDeliveries: 0,
+        deadLettered: 0,
+        retriedDeliveries: 0
+      });
+    }
+  } else if (timeRange === '30d') {
+    unit = 'day';
+    const currentBucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(currentBucket);
+      d.setUTCDate(d.getUTCDate() - i);
+      buckets.push({
+        timestamp: d.toISOString(),
+        totalDeliveries: 0,
+        successfulDeliveries: 0,
+        failedDeliveries: 0,
+        deadLettered: 0,
+        retriedDeliveries: 0
+      });
+    }
+  } else {
+    // 24h -> 24 hourly buckets
+    unit = 'hour';
+    const currentBucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), 0, 0, 0));
+    for (let i = 23; i >= 0; i--) {
+      const d = new Date(currentBucket);
+      d.setUTCHours(d.getUTCHours() - i);
+      buckets.push({
+        timestamp: d.toISOString(),
+        totalDeliveries: 0,
+        successfulDeliveries: 0,
+        failedDeliveries: 0,
+        deadLettered: 0,
+        retriedDeliveries: 0
+      });
+    }
+  }
+  
+  since = new Date(buckets[0].timestamp);
+
+  // 2. Find projects for this workspace
+  const Project = require('../models/Project');
+  const projects = await Project.find({ workspaceId: objectId }).select('_id');
+  const projectIds = projects.map(p => p._id);
+
+  if (projectIds.length === 0) return { timeRange, bucket: unit, data: buckets };
+
+  // 3. Aggregate WebhookEvents matching the time boundary
+  const eventAgg = await WebhookEvent.aggregate([
+    { $match: { projectId: { $in: projectIds }, receivedAt: { $gte: since } } },
+    { $group: {
+        _id: { $dateTrunc: { date: "$receivedAt", unit: unit } },
+        totalDeliveries: { $sum: 1 },
+        successfulDeliveries: { $sum: { $cond: [{ $eq: ["$status", "processed"] }, 1, 0] } },
+        failedDeliveries: { $sum: { $cond: [{ $eq: ["$status", "failed"] }, 1, 0] } },
+        deadLettered: { $sum: { $cond: [{ $eq: ["$status", "retry_exhausted"] }, 1, 0] } },
+        eventIds: { $push: "$_id" }
+    }}
+  ]);
+
+  const bucketMap = {};
+  const allEventIds = [];
+  
+  for (const stat of eventAgg) {
+    const ts = new Date(stat._id).toISOString();
+    bucketMap[ts] = stat;
+    allEventIds.push(...stat.eventIds);
+  }
+
+  // 4. Aggregate DeliveryAttempts matching EXACT event population for retries
+  let retriedEventsSet = new Set();
+  if (allEventIds.length > 0) {
+    const attemptAgg = await DeliveryAttempt.aggregate([
+      { $match: { webhookEventId: { $in: allEventIds } } },
+      { $group: { _id: "$webhookEventId", maxAttempt: { $max: "$attemptNumber" } } },
+      { $match: { maxAttempt: { $gt: 1 } } }
+    ]);
+    
+    for (const a of attemptAgg) {
+      retriedEventsSet.add(String(a._id));
+    }
+  }
+
+  // 5. Merge into continuous array
+  for (const b of buckets) {
+    const bData = bucketMap[b.timestamp];
+    if (bData) {
+      b.totalDeliveries = bData.totalDeliveries;
+      b.successfulDeliveries = bData.successfulDeliveries;
+      b.failedDeliveries = bData.failedDeliveries;
+      b.deadLettered = bData.deadLettered;
+      
+      let retriesInBucket = 0;
+      for (const eid of bData.eventIds) {
+        if (retriedEventsSet.has(String(eid))) {
+          retriesInBucket++;
+        }
+      }
+      b.retriedDeliveries = retriesInBucket;
+    }
+  }
+
+  return { timeRange, bucket: unit, data: buckets };
+};
+
 module.exports = {
   getProjectAnalytics,
   getEndpointHealth,
   getWorkspaceAnalytics,
-  getWorkspaceEndpointHealth
+  getWorkspaceEndpointHealth,
+  getWorkspaceDeliveryTrends
 };
