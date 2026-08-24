@@ -111,7 +111,8 @@ const ingestWebhook = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(`[${req.requestId}] Error ingesting webhook:`, error);
+    // Log only the error message, never the full error object to prevent leaking secrets/payloads
+    console.error(`[${req.requestId}] Error ingesting webhook:`, error.message || 'Unknown error');
     res.status(500).json({
       success:   false,
       message:   'Internal server error processing webhook',

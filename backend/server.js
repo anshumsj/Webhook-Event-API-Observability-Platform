@@ -30,7 +30,15 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json()); // Parses incoming requests with JSON payloads
+app.use(express.json({ limit: '500kb' })); // Parses incoming requests with JSON payloads and 500kb limit
+app.use((err, req, res, next) => {
+  // Catch malformed JSON requests gracefully
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    console.error(`[${req.requestId || 'sys'}] Malformed JSON request: ${err.message}`);
+    return res.status(400).json({ success: false, message: 'Invalid JSON payload' });
+  }
+  next(err);
+});
 app.use(requestIdMiddleware); // Attach req.requestId to all requests
 
 // Routes
