@@ -236,7 +236,7 @@ export default function Endpoints() {
                     </p>
                   </div>
                   <div className="bg-background border border-border rounded-lg p-3">
-                    <p className="text-xs text-muted font-medium mb-1 flex items-center gap-1.5"><Activity className="w-3.5 h-3.5"/> Total Attempts</p>
+                    <p className="text-xs text-muted font-medium mb-1 flex items-center gap-1.5"><Activity className="w-3.5 h-3.5"/> Attempts (24h)</p>
                     <p className="text-lg font-semibold text-text">
                       {endpoint.healthData?.totalAttempts || 0}
                     </p>
