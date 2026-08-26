@@ -6,9 +6,20 @@ const DeliveryAttempt = require('../models/DeliveryAttempt');
 const HEALTH_WINDOW_HOURS = 24;
 
 const HEALTHY_SUCCESS_RATE = 99;
-const DEGRADED_SUCCESS_RATE = 95;
+const DEGRADED_SUCCESS_RATE = 80;
 const HEALTHY_LATENCY_MS = 500;
 const DEGRADED_LATENCY_MS = 1000;
+
+const classifyEndpointHealth = (successRate, avgLatency, completedAttempts) => {
+  if (completedAttempts === 0) return 'no_data';
+  
+  if (successRate < DEGRADED_SUCCESS_RATE || avgLatency >= DEGRADED_LATENCY_MS) {
+    return 'unhealthy';
+  } else if (successRate >= HEALTHY_SUCCESS_RATE && avgLatency < HEALTHY_LATENCY_MS) {
+    return 'healthy';
+  }
+  return 'degraded';
+};
 
 const getProjectAnalytics = async (projectId) => {
   const objectId = new mongoose.Types.ObjectId(projectId);
@@ -102,6 +113,7 @@ const getEndpointHealth = async (projectId) => {
         totalAttempts: { $sum: 1 },
         successfulAttempts: { $sum: { $cond: [{ $eq: ["$status", "success"] }, 1, 0] } },
         failedAttempts: { $sum: { $cond: [{ $in: ["$status", ["failed", "timeout"]] }, 1, 0] } },
+        pendingAttempts: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
         latencySum: { $sum: { $cond: [{ $ne: ["$latencyMs", null] }, "$latencyMs", 0] } },
         latencyCount: { $sum: { $cond: [{ $ne: ["$latencyMs", null] }, 1, 0] } },
         retryCount: { $sum: { $cond: [{ $gt: ["$attemptNumber", 1] }, 1, 0] } },
@@ -129,6 +141,8 @@ const getEndpointHealth = async (projectId) => {
         totalAttempts: 0,
         successfulAttempts: 0,
         failedAttempts: 0,
+        pendingAttempts: 0,
+        completedAttempts: 0,
         successRate: 0,
         averageLatencyMs: 0,
         retryCount: 0,
@@ -136,14 +150,10 @@ const getEndpointHealth = async (projectId) => {
       };
     }
 
-    const successRate = (stats.successfulAttempts / stats.totalAttempts) * 100;
-    
-    let health = 'no_data';
-    if (successRate >= 95) health = 'healthy';
-    else if (successRate >= 80) health = 'degraded';
-    else health = 'unhealthy';
-
+    const completedAttempts = stats.successfulAttempts + stats.failedAttempts;
+    const successRate = completedAttempts > 0 ? (stats.successfulAttempts / completedAttempts) * 100 : 0;
     const avgLatency = stats.latencyCount > 0 ? (stats.latencySum / stats.latencyCount) : 0;
+    const health = classifyEndpointHealth(successRate, avgLatency, completedAttempts);
 
     return {
       _id: String(ep._id),
@@ -153,6 +163,8 @@ const getEndpointHealth = async (projectId) => {
       totalAttempts: stats.totalAttempts,
       successfulAttempts: stats.successfulAttempts,
       failedAttempts: stats.failedAttempts,
+      pendingAttempts: stats.pendingAttempts,
+      completedAttempts,
       successRate: Math.round(successRate * 100) / 100,
       averageLatencyMs: Math.round(avgLatency),
       retryCount: stats.retryCount,
@@ -282,94 +294,81 @@ const getWorkspaceEndpointHealth = async (workspaceId, timeRange = '24h') => {
 
   const endpointIds = endpoints.map(ep => ep._id);
 
-  // 4. Aggregate WebhookEvents matching the time boundary
-  const eventAgg = await WebhookEvent.aggregate([
-    { $match: { projectId: { $in: projectIds }, receivedAt: { $gte: since } } },
-    { $group: {
+  // 4. Aggregate recent DeliveryAttempts by endpoint
+  const attemptAgg = await DeliveryAttempt.aggregate([
+    { $match: { endpointId: { $in: endpointIds }, startedAt: { $gte: since } } },
+    {
+      $group: {
         _id: "$endpointId",
-        totalDeliveries: { $sum: 1 },
-        successfulDeliveries: { $sum: { $cond: [{ $eq: ["$status", "processed"] }, 1, 0] } },
-        failedDeliveries: { $sum: { $cond: [{ $eq: ["$status", "failed"] }, 1, 0] } },
-        deadLettered: { $sum: { $cond: [{ $eq: ["$status", "retry_exhausted"] }, 1, 0] } },
-        eventIds: { $push: "$_id" }
-    }}
+        totalAttempts: { $sum: 1 },
+        successfulAttempts: { $sum: { $cond: [{ $eq: ["$status", "success"] }, 1, 0] } },
+        failedAttempts: { $sum: { $cond: [{ $in: ["$status", ["failed", "timeout"]] }, 1, 0] } },
+        pendingAttempts: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
+        latencySum: { $sum: { $cond: [{ $ne: ["$latencyMs", null] }, "$latencyMs", 0] } },
+        latencyCount: { $sum: { $cond: [{ $ne: ["$latencyMs", null] }, 1, 0] } },
+        retryCount: { $sum: { $cond: [{ $gt: ["$attemptNumber", 1] }, 1, 0] } },
+        lastDeliveryAt: { $max: "$startedAt" }
+      }
+    }
   ]);
 
-  const eventMap = {};
-  const allEventIds = [];
-  for (const stat of eventAgg) {
-    eventMap[String(stat._id)] = stat;
-    allEventIds.push(...stat.eventIds);
-  }
-
-  // 5. Aggregate DeliveryAttempts matching EXACT event population
   const attemptMap = {};
-  if (allEventIds.length > 0) {
-    const attemptAgg = await DeliveryAttempt.aggregate([
-      { $match: { webhookEventId: { $in: allEventIds } } },
-      { $group: {
-          _id: { endpointId: "$endpointId", eventId: "$webhookEventId" },
-          attemptCount: { $sum: 1 },
-          avgLatency: { $avg: "$latencyMs" }
-      }},
-      { $group: {
-          _id: "$_id.endpointId",
-          retryCount: { $sum: { $cond: [{ $gt: ["$attemptCount", 1] }, 1, 0] } },
-          latencySum: { $sum: { $cond: [{ $ne: ["$avgLatency", null] }, "$avgLatency", 0] } },
-          latencyCount: { $sum: { $cond: [{ $ne: ["$avgLatency", null] }, 1, 0] } }
-      }}
-    ]);
-
-    for (const stat of attemptAgg) {
-      attemptMap[String(stat._id)] = stat;
-    }
+  for (const stat of attemptAgg) {
+    attemptMap[String(stat._id)] = stat;
   }
 
   // 6. Format and Classify Health
   const results = endpoints.map(ep => {
     const epIdStr = String(ep._id);
-    const eStats = eventMap[epIdStr] || { totalDeliveries: 0, successfulDeliveries: 0, failedDeliveries: 0, deadLettered: 0 };
-    const aStats = attemptMap[epIdStr] || { retryCount: 0, latencySum: 0, latencyCount: 0 };
+    const stats = attemptMap[epIdStr];
 
-    if (eStats.totalDeliveries === 0) {
+    if (!stats || stats.totalAttempts === 0) {
       return {
         _id: epIdStr,
         endpointId: ep.endpointId,
         destinationUrl: ep.destinationUrl,
         health: 'no_data',
+        totalAttempts: 0,
+        successfulAttempts: 0,
+        failedAttempts: 0,
+        pendingAttempts: 0,
+        completedAttempts: 0,
+        successRate: 0,
+        averageLatencyMs: 0,
+        retryCount: 0,
+        lastDeliveryAt: null,
+        // Legacy fields
         totalDeliveries: 0,
         successfulDeliveries: 0,
         failedDeliveries: 0,
-        deadLettered: 0,
-        successRate: 0,
-        retryRate: 0,
-        averageLatencyMs: 0
+        deadLettered: 0
       };
     }
 
-    const successRate = (eStats.successfulDeliveries / eStats.totalDeliveries) * 100;
-    const retryRate = (aStats.retryCount / eStats.totalDeliveries) * 100;
-    const avgLatency = aStats.latencyCount > 0 ? (aStats.latencySum / aStats.latencyCount) : 0;
-
-    let health = 'healthy';
-    if (successRate < DEGRADED_SUCCESS_RATE || avgLatency >= DEGRADED_LATENCY_MS) {
-      health = 'unhealthy';
-    } else if (successRate < HEALTHY_SUCCESS_RATE || avgLatency >= HEALTHY_LATENCY_MS) {
-      health = 'degraded';
-    }
+    const completedAttempts = stats.successfulAttempts + stats.failedAttempts;
+    const successRate = completedAttempts > 0 ? (stats.successfulAttempts / completedAttempts) * 100 : 0;
+    const avgLatency = stats.latencyCount > 0 ? (stats.latencySum / stats.latencyCount) : 0;
+    const health = classifyEndpointHealth(successRate, avgLatency, completedAttempts);
 
     return {
       _id: epIdStr,
       endpointId: ep.endpointId,
       destinationUrl: ep.destinationUrl,
       health,
-      totalDeliveries: eStats.totalDeliveries,
-      successfulDeliveries: eStats.successfulDeliveries,
-      failedDeliveries: eStats.failedDeliveries,
-      deadLettered: eStats.deadLettered,
+      totalAttempts: stats.totalAttempts,
+      successfulAttempts: stats.successfulAttempts,
+      failedAttempts: stats.failedAttempts,
+      pendingAttempts: stats.pendingAttempts,
+      completedAttempts,
       successRate: Math.round(successRate * 100) / 100,
-      retryRate: Math.round(retryRate * 100) / 100,
-      averageLatencyMs: Math.round(avgLatency)
+      averageLatencyMs: Math.round(avgLatency),
+      retryCount: stats.retryCount,
+      lastDeliveryAt: stats.lastDeliveryAt,
+      // Legacy fields preserved for backward compatibility
+      totalDeliveries: stats.totalAttempts,
+      successfulDeliveries: stats.successfulAttempts,
+      failedDeliveries: stats.failedAttempts,
+      deadLettered: 0
     };
   });
 
@@ -379,8 +378,8 @@ const getWorkspaceEndpointHealth = async (workspaceId, timeRange = '24h') => {
     if (healthOrder[a.health] !== healthOrder[b.health]) {
       return healthOrder[a.health] - healthOrder[b.health];
     }
-    if (a.failedDeliveries !== b.failedDeliveries) {
-      return b.failedDeliveries - a.failedDeliveries;
+    if (a.failedAttempts !== b.failedAttempts) {
+      return b.failedAttempts - a.failedAttempts;
     }
     return a.successRate - b.successRate;
   });

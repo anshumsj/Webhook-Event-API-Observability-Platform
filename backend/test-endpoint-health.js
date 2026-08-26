@@ -1,6 +1,6 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const { getWorkspaceEndpointHealth } = require('./services/analyticsService');
+const { getWorkspaceEndpointHealth, getEndpointHealth } = require('./services/analyticsService');
 const Workspace = require('./models/Workspace');
 const Project = require('./models/Project');
 const WebhookEndpoint = require('./models/WebhookEndpoint');
@@ -15,74 +15,112 @@ async function testHealth() {
   const workspace = await Workspace.create({ name: 'Health WS', owner: userId });
   const project = await Project.create({ name: 'Health Project', workspaceId: workspace._id, createdBy: userId });
 
+  // Helper to quickly create test data
+  let reqCounter = 0;
+  async function createData(ep, statusArray, latencies) {
+    for (let i = 0; i < statusArray.length; i++) {
+      const status = statusArray[i];
+      const ev = await WebhookEvent.create({
+        projectId: project._id, endpointId: ep._id, requestId: `r-${reqCounter++}`, status: status === 'success' ? 'processed' : 'failed', payload: {}, receivedAt: new Date()
+      });
+      await DeliveryAttempt.create({ webhookEventId: ev._id, endpointId: ep._id, attemptNumber: 1, status, latencyMs: latencies[i], startedAt: new Date() });
+    }
+  }
+
   // Endpoint 1: Healthy (100% success, low latency)
   const epHealthy = await WebhookEndpoint.create({ projectId: project._id, destinationUrl: 'http://h', secret: '1' });
-  const evHealthy = await WebhookEvent.create({
-    projectId: project._id, endpointId: epHealthy._id, requestId: 'r1', status: 'processed', payload: {}, receivedAt: new Date()
-  });
-  await DeliveryAttempt.create({ webhookEventId: evHealthy._id, endpointId: epHealthy._id, attemptNumber: 1, status: 'success', latencyMs: 200, startedAt: new Date() });
+  await createData(epHealthy, ['success'], [200]);
 
   // Endpoint 2: Degraded by Latency (100% success, 800ms latency)
   const epDegL = await WebhookEndpoint.create({ projectId: project._id, destinationUrl: 'http://dl', secret: '2' });
-  const evDegL = await WebhookEvent.create({
-    projectId: project._id, endpointId: epDegL._id, requestId: 'r2', status: 'processed', payload: {}, receivedAt: new Date()
-  });
-  await DeliveryAttempt.create({ webhookEventId: evDegL._id, endpointId: epDegL._id, attemptNumber: 1, status: 'success', latencyMs: 800, startedAt: new Date() });
+  await createData(epDegL, ['success'], [800]);
 
-  // Endpoint 3: Degraded by Success Rate (96% success, low latency -> simulated by 25 total, 24 success = 96%)
+  // Endpoint 3: Degraded by Success Rate (96% success, low latency)
   const epDegS = await WebhookEndpoint.create({ projectId: project._id, destinationUrl: 'http://ds', secret: '3' });
-  for (let i = 0; i < 25; i++) {
-    const isSuccess = i < 24;
-    const ev = await WebhookEvent.create({
-      projectId: project._id, endpointId: epDegS._id, requestId: `r3-${i}`, status: isSuccess ? 'processed' : 'failed', payload: {}, receivedAt: new Date()
-    });
-    await DeliveryAttempt.create({ webhookEventId: ev._id, endpointId: epDegS._id, attemptNumber: 1, status: isSuccess ? 'success' : 'failed', latencyMs: 200, startedAt: new Date() });
-  }
+  const statusesDegS = Array(25).fill('success');
+  statusesDegS[24] = 'failed'; // 24/25 = 96%
+  await createData(epDegS, statusesDegS, Array(25).fill(200));
 
   // Endpoint 4: Unhealthy by Latency (100% success, 1200ms latency)
   const epUnL = await WebhookEndpoint.create({ projectId: project._id, destinationUrl: 'http://ul', secret: '4' });
-  const evUnL = await WebhookEvent.create({
-    projectId: project._id, endpointId: epUnL._id, requestId: 'r4', status: 'processed', payload: {}, receivedAt: new Date()
-  });
-  await DeliveryAttempt.create({ webhookEventId: evUnL._id, endpointId: epUnL._id, attemptNumber: 1, status: 'success', latencyMs: 1200, startedAt: new Date() });
+  await createData(epUnL, ['success'], [1200]);
 
-  // Endpoint 5: Unhealthy by Success Rate (90% success)
+  // Endpoint 5: Unhealthy by Success Rate (70% success)
   const epUnS = await WebhookEndpoint.create({ projectId: project._id, destinationUrl: 'http://us', secret: '5' });
-  for (let i = 0; i < 10; i++) {
-    const isSuccess = i < 9;
-    const ev = await WebhookEvent.create({
-      projectId: project._id, endpointId: epUnS._id, requestId: `r5-${i}`, status: isSuccess ? 'processed' : 'failed', payload: {}, receivedAt: new Date()
-    });
-    await DeliveryAttempt.create({ webhookEventId: ev._id, endpointId: epUnS._id, attemptNumber: 1, status: isSuccess ? 'success' : 'failed', latencyMs: 200, startedAt: new Date() });
-  }
+  const statusesUnS = Array(10).fill('success');
+  statusesUnS[7] = 'failed';
+  statusesUnS[8] = 'failed';
+  statusesUnS[9] = 'failed'; // 7/10 = 70%
+  await createData(epUnS, statusesUnS, Array(10).fill(200));
 
   // Endpoint 6: No Data
   const epEmpty = await WebhookEndpoint.create({ projectId: project._id, destinationUrl: 'http://empty', secret: '6' });
 
+  // Endpoint 7: Timeout Semantic test (Timeout counts as failure)
+  const epTimeout = await WebhookEndpoint.create({ projectId: project._id, destinationUrl: 'http://timeout', secret: '7' });
+  await createData(epTimeout, ['success', 'timeout'], [200, null]); // 1 success, 1 timeout -> 50% success = Unhealthy
+
+  // Endpoint 8: Pending Semantic test (Pending doesn't corrupt success rate)
+  const epPending = await WebhookEndpoint.create({ projectId: project._id, destinationUrl: 'http://pending', secret: '8' });
+  await createData(epPending, ['success', 'pending'], [200, null]); // 1 success, 1 pending -> 100% success of COMPLETED attempts = Healthy
+
+  // Endpoint 9: Retry semantics
+  const epRetry = await WebhookEndpoint.create({ projectId: project._id, destinationUrl: 'http://retry', secret: '9' });
+  const evRetry = await WebhookEvent.create({
+    projectId: project._id, endpointId: epRetry._id, requestId: `r-retry`, status: 'processed', payload: {}, receivedAt: new Date()
+  });
+  // 1 event, 3 attempts (failed, failed, success)
+  await DeliveryAttempt.create({ webhookEventId: evRetry._id, endpointId: epRetry._id, attemptNumber: 1, status: 'failed', latencyMs: 200, startedAt: new Date() });
+  await DeliveryAttempt.create({ webhookEventId: evRetry._id, endpointId: epRetry._id, attemptNumber: 2, status: 'failed', latencyMs: 200, startedAt: new Date() });
+  await DeliveryAttempt.create({ webhookEventId: evRetry._id, endpointId: epRetry._id, attemptNumber: 3, status: 'success', latencyMs: 200, startedAt: new Date() });
+
   // Fetch health
-  const result = await getWorkspaceEndpointHealth(workspace._id.toString(), '24h');
+  const wsResult = await getWorkspaceEndpointHealth(workspace._id.toString(), '24h');
+  const prResult = await getEndpointHealth(project._id.toString());
   
+  // They should be mathematically identical in their output definitions (since they query the exact same data here)
   const hMap = {};
-  for (const ep of result.endpoints) {
-    hMap[ep.destinationUrl] = ep.health;
+  for (const ep of wsResult.endpoints) {
+    hMap[ep.destinationUrl] = ep;
+  }
+  const pMap = {};
+  for (const ep of prResult) {
+    pMap[ep.destinationUrl] = ep;
   }
 
-  if (hMap['http://h'] !== 'healthy') throw new Error(`Expected http://h to be healthy, got ${hMap['http://h']}`);
-  if (hMap['http://dl'] !== 'degraded') throw new Error(`Expected http://dl to be degraded, got ${hMap['http://dl']}`);
-  if (hMap['http://ds'] !== 'degraded') throw new Error(`Expected http://ds to be degraded, got ${hMap['http://ds']}`);
-  if (hMap['http://ul'] !== 'unhealthy') throw new Error(`Expected http://ul to be unhealthy, got ${hMap['http://ul']}`);
-  if (hMap['http://us'] !== 'unhealthy') throw new Error(`Expected http://us to be unhealthy, got ${hMap['http://us']}`);
-  if (hMap['http://empty'] !== 'no_data') throw new Error(`Expected http://empty to be no_data, got ${hMap['http://empty']}`);
-
-  console.log('[PASS] Endpoint health rules verified');
-
-  // Verify sorting: unhealthy, degraded, healthy, no_data
-  const order = result.endpoints.map(e => e.health);
-  const expectedOrder = ['unhealthy', 'unhealthy', 'degraded', 'degraded', 'healthy', 'no_data'];
-  if (JSON.stringify(order) !== JSON.stringify(expectedOrder)) {
-     throw new Error(`Expected sort order ${expectedOrder} but got ${order}`);
+  // Invariants checking
+  for (const ep of wsResult.endpoints) {
+    const pep = pMap[ep.destinationUrl];
+    if (ep.totalAttempts !== pep.totalAttempts) throw new Error(`Mismatch in totalAttempts for ${ep.destinationUrl}`);
+    if (ep.successfulAttempts !== pep.successfulAttempts) throw new Error(`Mismatch in successfulAttempts for ${ep.destinationUrl}`);
+    if (ep.failedAttempts !== pep.failedAttempts) throw new Error(`Mismatch in failedAttempts for ${ep.destinationUrl}`);
+    if (ep.completedAttempts !== ep.successfulAttempts + ep.failedAttempts) throw new Error(`Completed invariant failed for ${ep.destinationUrl}`);
+    if (ep.totalAttempts !== ep.completedAttempts + ep.pendingAttempts) throw new Error(`Total invariant failed for ${ep.destinationUrl}`);
+    if (ep.retryCount > ep.totalAttempts) throw new Error(`Retry invariant failed for ${ep.destinationUrl}`);
+    if (ep.successRate < 0 || ep.successRate > 100) throw new Error(`Success rate out of bounds for ${ep.destinationUrl}`);
+    if (ep.averageLatencyMs < 0) throw new Error(`Latency out of bounds for ${ep.destinationUrl}`);
   }
-  console.log('[PASS] Endpoint sort order verified');
+  console.log('[PASS] Mathematical invariants and project/workspace parity verified');
+
+  if (hMap['http://h'].health !== 'healthy') throw new Error(`Expected http://h to be healthy, got ${hMap['http://h'].health}`);
+  if (hMap['http://dl'].health !== 'degraded') throw new Error(`Expected http://dl to be degraded, got ${hMap['http://dl'].health}`);
+  if (hMap['http://ds'].health !== 'degraded') throw new Error(`Expected http://ds to be degraded, got ${hMap['http://ds'].health}`);
+  if (hMap['http://ul'].health !== 'unhealthy') throw new Error(`Expected http://ul to be unhealthy, got ${hMap['http://ul'].health}`);
+  if (hMap['http://us'].health !== 'unhealthy') throw new Error(`Expected http://us to be unhealthy, got ${hMap['http://us'].health}`);
+  if (hMap['http://empty'].health !== 'no_data') throw new Error(`Expected http://empty to be no_data, got ${hMap['http://empty'].health}`);
+  
+  if (hMap['http://timeout'].health !== 'unhealthy') throw new Error(`Expected http://timeout to be unhealthy, got ${hMap['http://timeout'].health}`);
+  if (hMap['http://timeout'].failedAttempts !== 1) throw new Error(`Expected http://timeout to have 1 failed attempt`);
+
+  if (hMap['http://pending'].health !== 'healthy') throw new Error(`Expected http://pending to be healthy, got ${hMap['http://pending'].health}`);
+  if (hMap['http://pending'].pendingAttempts !== 1) throw new Error(`Expected http://pending to have 1 pending attempt`);
+  if (hMap['http://pending'].successRate !== 100) throw new Error(`Expected http://pending to have 100% success rate on completed attempts`);
+
+  if (hMap['http://retry'].totalAttempts !== 3) throw new Error(`Expected http://retry to have 3 total attempts`);
+  if (hMap['http://retry'].retryCount !== 2) throw new Error(`Expected http://retry to have 2 retries`);
+  if (hMap['http://retry'].successRate !== 33.33) throw new Error(`Expected http://retry to have 33.33% success rate`);
+
+  console.log('[PASS] Endpoint health semantics verified');
 
   // Verify workspace isolation
   const emptyWorkspace = await Workspace.create({ name: 'Empty WS', owner: userId });
@@ -91,11 +129,11 @@ async function testHealth() {
   console.log('[PASS] Workspace isolation verified');
 
   // Cleanup
-  await DeliveryAttempt.deleteMany({ endpointId: { $in: [epHealthy._id, epDegL._id, epDegS._id, epUnL._id, epUnS._id, epEmpty._id] } });
-  await WebhookEvent.deleteMany({ projectId: project._id });
-  await WebhookEndpoint.deleteMany({ projectId: project._id });
-  await Project.deleteMany({ workspaceId: workspace._id });
-  await Workspace.deleteMany({ _id: { $in: [workspace._id, emptyWorkspace._id] } });
+  await DeliveryAttempt.deleteMany();
+  await WebhookEvent.deleteMany();
+  await WebhookEndpoint.deleteMany();
+  await Project.deleteMany();
+  await Workspace.deleteMany();
 
   process.exit(0);
 }
