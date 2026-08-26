@@ -18,6 +18,11 @@ export default function Events() {
   const urlPage = parseInt(searchParams.get('page'), 10) || 1;
   const urlProject = searchParams.get('project') || '';
   const urlOrder = searchParams.get('order') === 'asc' ? 'asc' : 'desc';
+  const urlStatus = searchParams.get('status') || '';
+  const urlEndpoint = searchParams.get('endpoint') || '';
+  const urlEventType = searchParams.get('eventType') || '';
+  const urlTimeRange = searchParams.get('timeRange') || 'All';
+  const urlSearch = searchParams.get('search') || '';
 
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(urlProject);
@@ -29,12 +34,12 @@ export default function Events() {
   const [newEventsCount, setNewEventsCount] = useState(0);
 
   // Filters State
-  const [statusFilter, setStatusFilter] = useState('');
-  const [endpointFilter, setEndpointFilter] = useState('');
-  const [eventTypeFilter, setEventTypeFilter] = useState('');
-  const [timeRangeFilter, setTimeRangeFilter] = useState('All');
-  const [searchInput, setSearchInput] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState(urlStatus);
+  const [endpointFilter, setEndpointFilter] = useState(urlEndpoint);
+  const [eventTypeFilter, setEventTypeFilter] = useState(urlEventType);
+  const [timeRangeFilter, setTimeRangeFilter] = useState(urlTimeRange);
+  const [searchInput, setSearchInput] = useState(urlSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
   const [sortOrder, setSortOrder] = useState(urlOrder);
 
   // Dropdown options
@@ -44,13 +49,20 @@ export default function Events() {
   // Debounce Search
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(searchInput);
       if (searchInput !== debouncedSearch) {
+        setDebouncedSearch(searchInput);
         setPagination(prev => ({ ...prev, page: 1 }));
+        setSearchParams(prev => {
+          const p = new URLSearchParams(prev);
+          if (searchInput) p.set('search', searchInput);
+          else p.delete('search');
+          p.set('page', '1');
+          return p;
+        }, { replace: true });
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchInput]);
+  }, [searchInput, debouncedSearch, setSearchParams]);
 
   // 1. Fetch projects when workspace changes
   useEffect(() => {
@@ -165,7 +177,7 @@ export default function Events() {
               p.set('project', defaultId);
               p.set('page', '1');
               return p;
-            });
+            }, { replace: true });
             setPagination(prev => ({ ...prev, page: 1 }));
             return defaultId;
           }
@@ -240,24 +252,39 @@ export default function Events() {
         p.set('project', selectedProjectId);
         p.set('page', newPage.toString());
         return p;
-      });
+      }, { replace: true });
     }
   };
 
   const handleFilterChange = (type, value) => {
-    if (type === 'status') setStatusFilter(value);
-    if (type === 'endpoint') setEndpointFilter(value);
-    if (type === 'eventType') setEventTypeFilter(value);
-    if (type === 'timeRange') setTimeRangeFilter(value);
-    if (type === 'sortOrder') {
-      setSortOrder(value);
-      setSearchParams(prev => {
-        const p = new URLSearchParams(prev);
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      
+      if (type === 'status') {
+        setStatusFilter(value);
+        if (value) p.set('status', value); else p.delete('status');
+      }
+      if (type === 'endpoint') {
+        setEndpointFilter(value);
+        if (value) p.set('endpoint', value); else p.delete('endpoint');
+      }
+      if (type === 'eventType') {
+        setEventTypeFilter(value);
+        if (value) p.set('eventType', value); else p.delete('eventType');
+      }
+      if (type === 'timeRange') {
+        setTimeRangeFilter(value);
+        if (value && value !== 'All') p.set('timeRange', value); else p.delete('timeRange');
+      }
+      if (type === 'sortOrder') {
+        setSortOrder(value);
         p.set('order', value);
-        p.set('page', '1');
-        return p;
-      });
-    }
+      }
+      
+      p.set('page', '1');
+      return p;
+    }, { replace: true });
+
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
@@ -267,14 +294,20 @@ export default function Events() {
     setEventTypeFilter('');
     setTimeRangeFilter('All');
     setSearchInput('');
+    setDebouncedSearch('');
     setSortOrder('desc');
     setPagination(prev => ({ ...prev, page: 1 }));
     setSearchParams(prev => {
       const p = new URLSearchParams(prev);
+      p.delete('status');
+      p.delete('endpoint');
+      p.delete('eventType');
+      p.delete('timeRange');
+      p.delete('search');
       p.set('order', 'desc');
       p.set('page', '1');
       return p;
-    });
+    }, { replace: true });
   };
 
   if (!activeWorkspace) {
@@ -305,7 +338,7 @@ export default function Events() {
                 p.set('project', newProject);
                 p.set('page', '1');
                 return p;
-              });
+              }, { replace: true });
             }}
             disabled={projects.length === 0}
           >
