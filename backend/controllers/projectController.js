@@ -7,7 +7,7 @@ const createProject = async (req, res) => {
     const userId = req.user.id;
 
     if (!name || !workspaceId) {
-      return res.status(400).json({ message: 'Project name and workspace ID are required' });
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Project name and workspace ID are required', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // Authorization check: Does the user belong to the workspace?
@@ -17,7 +17,7 @@ const createProject = async (req, res) => {
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Not authorized to create a project in this workspace' });
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to create a project in this workspace', requestId: req ? req.requestId : 'unknown' } });
     }
 
     const projectData = {
@@ -30,7 +30,7 @@ const createProject = async (req, res) => {
     res.status(201).json(newProject);
   } catch (error) {
     console.error('Error creating project:', error.message);
-    res.status(500).json({ message: 'Server error creating project' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error creating project', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -46,14 +46,14 @@ const getProjectsByWorkspace = async (req, res) => {
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Not authorized to view projects in this workspace' });
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to view projects in this workspace', requestId: req ? req.requestId : 'unknown' } });
     }
 
     const projects = await projectService.getProjectsByWorkspaceId(workspaceId);
     res.status(200).json(projects);
   } catch (error) {
     console.error('Error getting projects:', error.message);
-    res.status(500).json({ message: 'Server error retrieving projects' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error retrieving projects', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 

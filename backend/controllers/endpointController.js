@@ -10,7 +10,7 @@ const getEndpointsByProject = async (req, res) => {
     // 1. Verify project exists
     const project = await Project.findById(projectId);
     if (!project) {
-      return res.status(404).json({ message: 'Project not found' });
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 2. Authorize via workspace
@@ -20,7 +20,7 @@ const getEndpointsByProject = async (req, res) => {
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Not authorized to view endpoints for this project' });
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to view endpoints for this project', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 3. Fetch endpoints for the project
@@ -29,7 +29,7 @@ const getEndpointsByProject = async (req, res) => {
     res.status(200).json(endpoints);
   } catch (error) {
     console.error('Error getting endpoints:', error.message);
-    res.status(500).json({ message: 'Server error retrieving endpoints' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error retrieving endpoints', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -41,7 +41,7 @@ const createEndpoint = async (req, res) => {
     // 1. Verify project exists
     const project = await Project.findById(projectId);
     if (!project) {
-      return res.status(404).json({ message: 'Project not found' });
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 2. Authorize via workspace
@@ -51,7 +51,7 @@ const createEndpoint = async (req, res) => {
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Not authorized to create endpoints for this project' });
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to create endpoints for this project', requestId: req ? req.requestId : 'unknown' } });
     }
 
     const { destinationUrl } = req.body;
@@ -67,7 +67,7 @@ const createEndpoint = async (req, res) => {
     res.status(201).json(endpoint);
   } catch (error) {
     console.error('Error creating endpoint:', error.message);
-    res.status(500).json({ message: 'Server error creating endpoint' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error creating endpoint', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -80,13 +80,13 @@ const updateEndpoint = async (req, res) => {
     // 1. Find the endpoint
     const endpoint = await WebhookEndpoint.findOne({ endpointId });
     if (!endpoint) {
-      return res.status(404).json({ message: 'Webhook endpoint not found' });
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Webhook endpoint not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 2. Find its project
     const project = await Project.findById(endpoint.projectId);
     if (!project) {
-      return res.status(404).json({ message: 'Associated project not found' });
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Associated project not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 3. Authorize via workspace
@@ -96,7 +96,7 @@ const updateEndpoint = async (req, res) => {
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Not authorized to update this endpoint' });
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to update this endpoint', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 4. Validate URL
@@ -104,7 +104,7 @@ const updateEndpoint = async (req, res) => {
       try {
         new URL(destinationUrl);
       } catch (err) {
-        return res.status(400).json({ message: 'Invalid destination URL format' });
+        return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid destination URL format', requestId: req ? req.requestId : 'unknown' } });
       }
     }
 
@@ -115,7 +115,7 @@ const updateEndpoint = async (req, res) => {
     res.status(200).json(endpoint);
   } catch (error) {
     console.error('Error updating endpoint:', error.message);
-    res.status(500).json({ message: 'Server error updating endpoint' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error updating endpoint', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 

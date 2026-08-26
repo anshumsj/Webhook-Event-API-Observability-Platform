@@ -139,7 +139,7 @@ const buildProcessor = (emitFn) => async (job) => {
     if (!skipDelivery) {
       const { deliverWebhook } = require('../services/deliveryService');
       try {
-        const result = await deliverWebhook(processingDoc, endpoint.destinationUrl, endpoint.secret, attemptNumber);
+        const result = await deliverWebhook(processingDoc, endpoint.destinationUrl, endpoint.secret, attemptNumber, isManualReplay);
         
         // Success (2xx)
         await DeliveryAttempt.findByIdAndUpdate(attemptDoc._id, {

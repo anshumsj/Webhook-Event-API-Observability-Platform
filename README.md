@@ -49,12 +49,7 @@ The platform uses an asynchronous, highly-scalable architecture:
 
 ### Setup Instructions
 1. Run `npm install` in the root directory. This will automatically install dependencies for both the frontend and backend workspaces.
-2. In the `backend/` directory, create a `.env` file with the following variables:
-   ```env
-   PORT=3001
-   MONGODB_URI=mongodb://localhost:27017/webhook-observability
-   REDIS_HOST=localhost
-   REDIS_PORT=6379
-   JWT_SECRET=your_super_secret_jwt_key
-   ```
+2. Create your `.env` files from the provided examples:
+   - In the `backend/` directory, copy `.env.example` to `.env` and fill in your values (like `MONGODB_URI` and `JWT_SECRET`).
+   - In the `frontend/` directory, copy `.env.example` to `.env` if you need to override `VITE_API_BASE_URL`.
 3. Run `npm run dev` in the root directory. This will start the React frontend, the Express backend API, and the BullMQ Worker concurrently.

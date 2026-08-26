@@ -10,7 +10,7 @@ const register = async (req, res) => {
     }
 
     if (password.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Password must be at least 6 characters long', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // Call service to register user
@@ -27,11 +27,11 @@ const register = async (req, res) => {
     });
   } catch (error) {
     if (error.message === 'User already exists') {
-      return res.status(400).json({ message: error.message });
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: error.message, requestId: req ? req.requestId : 'unknown' } });
     }
     
     console.error('Registration error:', error.message);
-    res.status(500).json({ message: 'Server Error' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server Error', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -41,7 +41,7 @@ const login = async (req, res) => {
 
     // Validate input
     if (!email || !password) {
-      return res.status(400).json({ message: 'Please provide email and password' });
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Please provide email and password', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // Call service to login user
@@ -58,11 +58,11 @@ const login = async (req, res) => {
     });
   } catch (error) {
     if (error.message === 'Invalid credentials') {
-      return res.status(401).json({ message: error.message });
+      return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: error.message, requestId: req ? req.requestId : 'unknown' } });
     }
     
     console.error('Login error:', error.message);
-    res.status(500).json({ message: 'Server Error' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server Error', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -81,7 +81,7 @@ const getMe = async (req, res) => {
     });
   } catch (error) {
     console.error('Get me error:', error.message);
-    res.status(500).json({ message: 'Server Error' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server Error', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 

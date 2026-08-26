@@ -9,7 +9,7 @@ const getProjectAnalytics = async (req, res) => {
     // 1. Verify project exists
     const project = await Project.findById(projectId);
     if (!project) {
-      return res.status(404).json({ message: 'Project not found' });
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 2. Authorize via workspace
@@ -19,7 +19,7 @@ const getProjectAnalytics = async (req, res) => {
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Not authorized to access analytics for this project' });
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to access analytics for this project', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 3. Fetch analytics
@@ -28,7 +28,7 @@ const getProjectAnalytics = async (req, res) => {
     res.status(200).json(analytics);
   } catch (error) {
     console.error('Error fetching project analytics:', error);
-    res.status(500).json({ message: 'Server error retrieving analytics' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error retrieving analytics', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -39,7 +39,7 @@ const getEndpointHealth = async (req, res) => {
     // 1. Verify project exists
     const project = await Project.findById(projectId);
     if (!project) {
-      return res.status(404).json({ message: 'Project not found' });
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 2. Authorize via workspace
@@ -49,7 +49,7 @@ const getEndpointHealth = async (req, res) => {
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Not authorized to access endpoint health for this project' });
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to access endpoint health for this project', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 3. Fetch endpoint health
@@ -58,7 +58,7 @@ const getEndpointHealth = async (req, res) => {
     res.status(200).json(healthData);
   } catch (error) {
     console.error('Error fetching endpoint health:', error);
-    res.status(500).json({ message: 'Server error retrieving endpoint health' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error retrieving endpoint health', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -74,7 +74,7 @@ const getWorkspaceAnalytics = async (req, res) => {
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Not authorized to access analytics for this workspace' });
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to access analytics for this workspace', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 2. Fetch analytics
@@ -83,7 +83,7 @@ const getWorkspaceAnalytics = async (req, res) => {
     res.status(200).json(analytics);
   } catch (error) {
     console.error('Error fetching workspace analytics:', error);
-    res.status(500).json({ message: 'Server error retrieving workspace analytics' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error retrieving workspace analytics', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -99,7 +99,7 @@ const getWorkspaceEndpointHealth = async (req, res) => {
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Not authorized to access endpoint health for this workspace' });
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to access endpoint health for this workspace', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 2. Fetch endpoint health
@@ -108,7 +108,7 @@ const getWorkspaceEndpointHealth = async (req, res) => {
     res.status(200).json(health);
   } catch (error) {
     console.error('Error fetching workspace endpoint health:', error);
-    res.status(500).json({ message: 'Server error retrieving workspace endpoint health' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error retrieving workspace endpoint health', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -124,7 +124,7 @@ const getWorkspaceDeliveryTrends = async (req, res) => {
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Not authorized to access trends for this workspace' });
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to access trends for this workspace', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 2. Fetch trends
@@ -133,7 +133,7 @@ const getWorkspaceDeliveryTrends = async (req, res) => {
     res.status(200).json(trends);
   } catch (error) {
     console.error('Error fetching workspace delivery trends:', error);
-    res.status(500).json({ message: 'Server error retrieving workspace delivery trends' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error retrieving workspace delivery trends', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 

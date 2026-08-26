@@ -86,7 +86,7 @@ async function runTests() {
   
   // Verify idempotency key does not equal original event Id
   const key = replayAttempt.requestHeaders?.get ? replayAttempt.requestHeaders.get('Idempotency-Key') : replayAttempt.requestHeaders['Idempotency-Key'];
-  if (key !== `${event.eventId}-attempt-2`) throw new Error(`Incorrect idempotency key: ${key}`);
+  if (key !== `${event.eventId}-replay-2`) throw new Error(`Incorrect idempotency key: ${key}`);
 
   console.log('[PASS] Worker processed manual replay attempt cleanly');
 

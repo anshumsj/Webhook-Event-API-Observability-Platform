@@ -12,10 +12,7 @@ const ingestWebhook = async (req, res) => {
     // 1. Validate endpoint
     const endpoint = await WebhookEndpoint.findOne({ endpointId });
     if (!endpoint) {
-      return res.status(404).json({
-        success: false,
-        message: 'Webhook endpoint not found'
-      });
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Webhook endpoint not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 2. Extract event type from common webhook provider headers
@@ -100,11 +97,7 @@ const ingestWebhook = async (req, res) => {
       // Update MongoDB status to 'failed' so it isn't orphaned as 'received'
       await WebhookEvent.findOneAndUpdate({ eventId: event.eventId }, { status: 'failed' });
       
-      return res.status(500).json({
-        success: false,
-        message: 'Internal server error enqueuing webhook',
-        requestId: req.requestId,
-      });
+      return res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Internal server error enqueuing webhook', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 6. Log summary
@@ -121,11 +114,7 @@ const ingestWebhook = async (req, res) => {
   } catch (error) {
     // Log only the error message, never the full error object to prevent leaking secrets/payloads
     console.error(`[${req.requestId}] Error ingesting webhook:`, error.message || 'Unknown error');
-    res.status(500).json({
-      success:   false,
-      message:   'Internal server error processing webhook',
-      requestId: req.requestId,
-    });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Internal server error processing webhook', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -142,7 +131,7 @@ const getEventsByProject = async (req, res) => {
     // 1. Verify project exists
     const project = await Project.findById(projectId);
     if (!project) {
-      return res.status(404).json({ message: 'Project not found' });
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 2. Authorize via workspace
@@ -152,7 +141,7 @@ const getEventsByProject = async (req, res) => {
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Not authorized to access events for this project' });
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to access events for this project', requestId: req ? req.requestId : 'unknown' } });
     }
     
     // 3. Build dynamic query
@@ -163,17 +152,12 @@ const getEventsByProject = async (req, res) => {
     if (eventType) query.eventType = eventType;
 
     if (endpointId) {
-      const mongoose = require('mongoose');
-      if (!mongoose.Types.ObjectId.isValid(endpointId)) {
-        return res.status(400).json({ message: 'Invalid endpointId format' });
-      }
-      
-      const endpointExists = await WebhookEndpoint.findOne({ _id: endpointId, projectId });
+      const endpointExists = await WebhookEndpoint.findOne({ endpointId, projectId });
       if (!endpointExists) {
-        return res.status(403).json({ message: 'Endpoint does not belong to this project' });
+        return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Endpoint not found or does not belong to this project', requestId: req ? req.requestId : 'unknown' } });
       }
       
-      query.endpointId = endpointId;
+      query.endpointId = endpointExists._id;
     }
 
     if (from || to) {
@@ -181,14 +165,14 @@ const getEventsByProject = async (req, res) => {
       if (from) {
         const fromDate = new Date(from);
         if (isNaN(fromDate.getTime())) {
-          return res.status(400).json({ message: 'Invalid "from" date format' });
+          return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid "from" date format', requestId: req ? req.requestId : 'unknown' } });
         }
         query.receivedAt.$gte = fromDate;
       }
       if (to) {
         const toDate = new Date(to);
         if (isNaN(toDate.getTime())) {
-          return res.status(400).json({ message: 'Invalid "to" date format' });
+          return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid "to" date format', requestId: req ? req.requestId : 'unknown' } });
         }
         query.receivedAt.$lte = toDate;
       }
@@ -241,7 +225,7 @@ const getEventsByProject = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching events:', error);
-    res.status(500).json({ message: 'Server error retrieving events' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error retrieving events', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -288,13 +272,13 @@ const getEventById = async (req, res) => {
     // 1. Fetch event
     const event = await WebhookEvent.findOne({ eventId });
     if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Event not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 2. Fetch project
     const project = await Project.findById(event.projectId);
     if (!project) {
-      return res.status(404).json({ message: 'Project associated with event not found' });
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project associated with event not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 3. Authorize via workspace
@@ -304,7 +288,7 @@ const getEventById = async (req, res) => {
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Not authorized to access this event' });
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to access this event', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 4. Redact sensitive headers
@@ -347,7 +331,7 @@ const getEventById = async (req, res) => {
     res.status(200).json(dto);
   } catch (error) {
     console.error('Error fetching event by ID:', error);
-    res.status(500).json({ message: 'Server error retrieving event' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error retrieving event', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -356,20 +340,20 @@ const getProjectEventTypes = async (req, res) => {
     const { projectId } = req.params;
 
     const project = await Project.findById(projectId);
-    if (!project) return res.status(404).json({ message: 'Project not found' });
+    if (!project) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project not found', requestId: req ? req.requestId : 'unknown' } });
 
     const workspace = await Workspace.findOne({
       _id: project.workspaceId,
       $or: [{ owner: req.user.id }, { members: req.user.id }]
     });
 
-    if (!workspace) return res.status(403).json({ message: 'Not authorized' });
+    if (!workspace) return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized', requestId: req ? req.requestId : 'unknown' } });
 
     const types = await WebhookEvent.distinct('eventType', { projectId });
     res.status(200).json(types);
   } catch (error) {
     console.error('Error fetching event types:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -380,13 +364,13 @@ const replayEvent = async (req, res) => {
     // 1. Fetch event
     const event = await WebhookEvent.findOne({ eventId });
     if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Event not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 2. Fetch project and authorize via workspace
     const project = await Project.findById(event.projectId);
     if (!project) {
-      return res.status(404).json({ message: 'Project associated with event not found' });
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project associated with event not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
     const workspace = await Workspace.findOne({
@@ -395,7 +379,7 @@ const replayEvent = async (req, res) => {
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Not authorized to access this event' });
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to access this event', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 3. Verify terminal state
@@ -407,7 +391,7 @@ const replayEvent = async (req, res) => {
     // 4. Fetch endpoint and check availability
     const endpoint = await WebhookEndpoint.findById(event.endpointId);
     if (!endpoint || !endpoint.destinationUrl) {
-      return res.status(400).json({ message: 'Cannot replay: Endpoint is unavailable or deleted' });
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Cannot replay: Endpoint is unavailable or deleted', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 5. Queue the replay job
@@ -428,7 +412,7 @@ const replayEvent = async (req, res) => {
     });
   } catch (error) {
     console.error('Error replaying event:', error);
-    res.status(500).json({ message: 'Server error queueing replay' });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error queueing replay', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 

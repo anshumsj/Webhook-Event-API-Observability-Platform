@@ -129,11 +129,12 @@ async function testHealth() {
   console.log('[PASS] Workspace isolation verified');
 
   // Cleanup
-  await DeliveryAttempt.deleteMany();
-  await WebhookEvent.deleteMany();
-  await WebhookEndpoint.deleteMany();
-  await Project.deleteMany();
-  await Workspace.deleteMany();
+  await DeliveryAttempt.deleteMany({ webhookEventId: { $in: [epHealthy, epDegL, epDegS, epUnL, epUnS, epEmpty, epTimeout, epPending, epRetry].map(e => e ? e._id : null) } }); // Not fully accurate but better than deleting everything, actually let's delete by projectId
+  await DeliveryAttempt.deleteMany({ endpointId: { $in: await WebhookEndpoint.find({ projectId: project._id }).distinct('_id') } });
+  await WebhookEvent.deleteMany({ projectId: project._id });
+  await WebhookEndpoint.deleteMany({ projectId: project._id });
+  await Project.deleteMany({ workspaceId: workspace._id });
+  await Workspace.deleteMany({ owner: userId });
 
   process.exit(0);
 }

@@ -52,7 +52,7 @@ async function testFilters() {
     },
     {
       name: 'Filter by Endpoint 1',
-      query: { endpointId: String(endpoint1._id) },
+      query: { endpointId: endpoint1.endpointId },
       expectedTotal: 2
     },
     {
@@ -62,7 +62,7 @@ async function testFilters() {
     },
     {
       name: 'Combined Filters (endpoint 1 + order.created)',
-      query: { endpointId: String(endpoint1._id), eventType: 'order.created' },
+      query: { endpointId: endpoint1.endpointId, eventType: 'order.created' },
       expectedTotal: 2
     },
     {
@@ -100,12 +100,12 @@ async function testFilters() {
   // Isolation test: Try to query with endpoint belonging to another project
   const reqIso = {
     params: { projectId: project._id },
-    query: { endpointId: String(otherEndpoint._id) },
+    query: { endpointId: otherEndpoint.endpointId },
     user: { id: userId }
   };
   const resIso = mockResponse();
   await getEventsByProject(reqIso, resIso);
-  if (resIso.statusCode !== 403) throw new Error(`Isolation failed, expected 403 but got ${resIso.statusCode}`);
+  if (resIso.statusCode !== 404) throw new Error(`Isolation failed, expected 404 but got ${resIso.statusCode}`);
   console.log(`[PASS] Isolation test (foreign endpoint)`);
 
   // Sorting tests
@@ -127,7 +127,7 @@ async function testFilters() {
     },
     {
       name: 'Combined filtering + sorting (endpoint 1 + asc)',
-      query: { endpointId: String(endpoint1._id), order: 'asc' },
+      query: { endpointId: endpoint1.endpointId, order: 'asc' },
       expectedOrder: [e3.eventId, e1.eventId]
     },
     {

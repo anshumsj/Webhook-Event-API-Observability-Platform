@@ -63,6 +63,7 @@ app.use((err, req, res, next) => {
 app.use(requestIdMiddleware); // Attach req.requestId to all requests
 
 // Routes
+app.use('/api/auth/api-keys', require('./routes/apiKeyRoutes'));
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/workspaces', require('./routes/workspaceRoutes'));
 app.use('/api/projects', require('./routes/projectRoutes'));
