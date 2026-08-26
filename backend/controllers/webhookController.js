@@ -232,6 +232,42 @@ const getEventsByProject = async (req, res) => {
   }
 };
 
+const redactHeaders = (headersInput) => {
+  if (!headersInput) return {};
+  const plainHeaders = headersInput instanceof Map
+    ? Object.fromEntries(headersInput)
+    : Object.assign({}, headersInput);
+
+  const sensitivePatterns = ['authorization', 'cookie', 'set-cookie', 'x-api-key', 'stripe-signature', 'x-hub-signature', 'secret', 'signature'];
+  const redactedHeaders = {};
+  for (const [key, val] of Object.entries(plainHeaders)) {
+    const lowerKey = key.toLowerCase();
+    const isSensitive = sensitivePatterns.some(pattern => lowerKey.includes(pattern));
+    redactedHeaders[key] = isSensitive ? '[REDACTED]' : val;
+  }
+  return redactedHeaders;
+};
+
+const maskUrlCredentials = (urlString) => {
+  if (!urlString) return urlString;
+  try {
+    const url = new URL(urlString);
+    if (url.username) url.username = 'REDACTED';
+    if (url.password) url.password = 'REDACTED';
+    
+    const sensitiveQueryParams = ['token', 'key', 'secret', 'api_key', 'apikey', 'auth'];
+    const keys = Array.from(url.searchParams.keys());
+    for (const key of keys) {
+      if (sensitiveQueryParams.some(p => key.toLowerCase().includes(p))) {
+        url.searchParams.set(key, '[REDACTED]');
+      }
+    }
+    return url.toString();
+  } catch (e) {
+    return urlString;
+  }
+};
+
 const getEventById = async (req, res) => {
   try {
     const { eventId } = req.params;
@@ -258,29 +294,23 @@ const getEventById = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to access this event' });
     }
 
-    // 4. Convert Mongoose Map → plain JS object.
-    //    headers is declared as `type: Map` in the schema. Spreading a Mongoose Map
-    //    directly leaks internal Mongoose properties ($__parent, $__path, etc.).
-    //    Object.fromEntries() on the Map gives us a clean, safe plain object.
-    const plainHeaders = event.headers instanceof Map
-      ? Object.fromEntries(event.headers)
-      : (event.headers ? Object.assign({}, event.headers) : {});
+    // 4. Redact sensitive headers
+    const redactedHeaders = redactHeaders(event.headers);
 
-    // 5. Redact sensitive headers — case-insensitive matching.
-    const sensitivePatterns = ['authorization', 'cookie', 'x-api-key', 'stripe-signature', 'x-hub-signature', 'secret'];
-    const redactedHeaders = {};
-    for (const [key, val] of Object.entries(plainHeaders)) {
-      const lowerKey = key.toLowerCase();
-      const isSensitive = sensitivePatterns.some(pattern => lowerKey.includes(pattern));
-      redactedHeaders[key] = isSensitive ? '[REDACTED]' : val;
-    }
-
-    // 6. Fetch delivery attempts
+    // 5. Fetch delivery attempts
     const DeliveryAttempt = require('../models/DeliveryAttempt');
-    const attempts = await DeliveryAttempt.find({ webhookEventId: event._id })
+    const rawAttempts = await DeliveryAttempt.find({ webhookEventId: event._id })
       .sort({ attemptNumber: 1 })
       .select('-__v')
       .lean();
+
+    // Redact attempts telemetry
+    const attempts = rawAttempts.map(attempt => ({
+      ...attempt,
+      destinationUrl: maskUrlCredentials(attempt.destinationUrl),
+      requestHeaders: redactHeaders(attempt.requestHeaders),
+      responseHeaders: redactHeaders(attempt.responseHeaders)
+    }));
 
     // 7. Build an explicit, clean DTO — never spread toObject() directly,
     //    as it can include Mongoose internals depending on schema config.

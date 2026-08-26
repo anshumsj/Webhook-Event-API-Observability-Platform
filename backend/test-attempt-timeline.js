@@ -50,7 +50,11 @@ async function testAttemptTimeline() {
     responseStatusCode: 200,
     latencyMs: 150,
     startedAt: new Date(Date.now() - 1000 * 30),
-    completedAt: new Date(Date.now() - 1000 * 29)
+    completedAt: new Date(Date.now() - 1000 * 29),
+    destinationUrl: 'http://username:password@t/?token=123',
+    requestMethod: 'POST',
+    requestHeaders: new Map([['Content-Type', 'application/json'], ['X-HookSight-Signature', 'sha256=123']]),
+    responseHeaders: new Map([['Content-Type', 'application/json'], ['Set-Cookie', 'session=abc']])
   });
 
   await DeliveryAttempt.create({
@@ -84,6 +88,22 @@ async function testAttemptTimeline() {
   
   if (dto.attempts[0].status !== 'failed' || dto.attempts[0].responseStatusCode !== 500) {
       throw new Error('Attempt 1 data mismatch');
+  }
+
+  // Verify Attempt 2 telemetry and redaction
+  const attempt2 = dto.attempts[1];
+  if (attempt2.destinationUrl !== 'http://REDACTED:REDACTED@t/?token=%5BREDACTED%5D') {
+      throw new Error(`Destination URL not masked properly: ${attempt2.destinationUrl}`);
+  }
+  if (attempt2.requestMethod !== 'POST') {
+      throw new Error('Missing requestMethod');
+  }
+  if (!attempt2.requestHeaders || attempt2.requestHeaders['X-HookSight-Signature'] !== '[REDACTED]') {
+      console.log('requestHeaders:', attempt2.requestHeaders);
+      throw new Error('requestHeaders not redacted properly');
+  }
+  if (!attempt2.responseHeaders || attempt2.responseHeaders['Set-Cookie'] !== '[REDACTED]') {
+      throw new Error('responseHeaders not redacted properly');
   }
 
   // Isolation test: Unrelated user

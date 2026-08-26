@@ -79,7 +79,9 @@ const buildProcessor = (emitFn) => async (job) => {
       endpointId: endpoint._id,
       attemptNumber,
       status: 'pending',
-      startedAt: new Date(attemptStart)
+      startedAt: new Date(attemptStart),
+      destinationUrl: endpoint.destinationUrl,
+      requestMethod: 'POST'
     });
 
     const { deliverWebhook } = require('../services/deliveryService');
@@ -91,7 +93,9 @@ const buildProcessor = (emitFn) => async (job) => {
         status: 'success',
         responseStatusCode: result.status,
         latencyMs: Date.now() - attemptStart,
-        completedAt: new Date()
+        completedAt: new Date(),
+        requestHeaders: result.requestHeaders,
+        responseHeaders: result.responseHeaders
       });
       statusToSet = 'processed';
     } catch (error) {
@@ -103,7 +107,9 @@ const buildProcessor = (emitFn) => async (job) => {
         responseBody: error.responseBody,
         errorMessage: error.message,
         latencyMs: Date.now() - attemptStart,
-        completedAt: new Date()
+        completedAt: new Date(),
+        requestHeaders: error.requestHeaders,
+        responseHeaders: error.responseHeaders
       });
       
       // Rethrow so BullMQ retries

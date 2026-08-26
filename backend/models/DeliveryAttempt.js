@@ -42,6 +42,21 @@ const deliveryAttemptSchema = new mongoose.Schema({
   },
   completedAt: {
     type: Date
+  },
+  destinationUrl: {
+    type: String
+  },
+  requestMethod: {
+    type: String,
+    default: 'POST'
+  },
+  requestHeaders: {
+    type: Map,
+    of: String
+  },
+  responseHeaders: {
+    type: Map,
+    of: String
   }
 }, {
   timestamps: true

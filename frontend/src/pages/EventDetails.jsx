@@ -4,6 +4,8 @@ import api from '../services/api';
 import { useSocket } from '../context/SocketContext';
 import { ArrowLeft, Clock, CheckCircle2, XCircle, Loader2, Database, Braces, AlignLeft, Box, Activity } from 'lucide-react';
 import { format } from 'date-fns';
+import AttemptTimeline from '../components/AttemptTimeline';
+import LifecycleTimeline from '../components/LifecycleTimeline';
 
 export default function EventDetails() {
   const { eventId } = useParams();
@@ -262,97 +264,7 @@ export default function EventDetails() {
                 <h3 className="font-semibold text-text">Delivery Attempts</h3>
               </div>
               <div className="p-6 relative">
-                <div className="absolute left-[43px] top-8 bottom-8 w-px bg-border"></div>
-                <div className="space-y-6 relative z-10">
-                  {event.attempts.map((attempt, index) => {
-                    const isSuccess = attempt.status === 'success';
-                    const isFailed = attempt.status === 'failed' || attempt.status === 'timeout';
-                    
-                    let dotClass, icon;
-                    if (isSuccess) {
-                      dotClass = 'bg-emerald-400/20 border border-emerald-400/30';
-                      icon = <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
-                    } else if (isFailed) {
-                      dotClass = 'bg-rose-400/20 border border-rose-400/30';
-                      icon = <XCircle className="w-4 h-4 text-rose-400" />;
-                    } else {
-                      dotClass = 'bg-amber-400/20 border border-amber-400/30';
-                      icon = <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />;
-                    }
-
-                    return (
-                      <React.Fragment key={attempt.attemptNumber}>
-                        <div className="flex items-start gap-4">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${dotClass} mt-1 relative z-10`}>
-                            {icon}
-                          </div>
-                          <div className="flex-1 bg-background border border-border rounded-lg p-4 shadow-sm hover:border-primary/30 transition-colors">
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2">
-                              <h4 className={`font-semibold text-base flex items-center gap-2 ${isSuccess ? 'text-emerald-400' : isFailed ? 'text-rose-400' : 'text-amber-400'}`}>
-                                Attempt #{attempt.attemptNumber}
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 border border-white/10 uppercase tracking-wider text-muted">
-                                  {attempt.status}
-                                </span>
-                              </h4>
-                              <div className="text-left sm:text-right text-xs text-muted font-mono flex flex-row sm:flex-col gap-3 sm:gap-0">
-                                <div>{format(new Date(attempt.startedAt), 'MMM d, HH:mm:ss.SSS')}</div>
-                                {attempt.latencyMs != null && <div>{attempt.latencyMs} ms</div>}
-                              </div>
-                            </div>
-                            
-                            {attempt.responseStatusCode != null && (
-                              <div className="text-sm mb-2">
-                                <span className="text-muted font-semibold mr-2">HTTP Status:</span>
-                                <span className={attempt.responseStatusCode >= 200 && attempt.responseStatusCode < 300 ? 'text-emerald-400 font-mono font-bold' : 'text-rose-400 font-mono font-bold'}>
-                                  {attempt.responseStatusCode}
-                                </span>
-                              </div>
-                            )}
-                            
-                            {attempt.errorMessage && (
-                              <div className="text-sm mb-3">
-                                <span className="text-muted font-semibold block mb-1">Error Message:</span>
-                                <span className="text-rose-400 font-mono text-xs block bg-rose-400/5 p-2 rounded border border-rose-400/10 break-all">{attempt.errorMessage}</span>
-                              </div>
-                            )}
-
-                            {attempt.responseBody && (
-                              <div className="mt-3">
-                                <span className="text-muted text-xs font-semibold uppercase mb-1 block">Response Body</span>
-                                <pre className="text-xs font-mono text-muted bg-surface p-3 rounded border border-border whitespace-pre-wrap break-all max-h-48 overflow-y-auto">
-                                  {attempt.responseBody}
-                                </pre>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Visual Connector for Retry */}
-                        {index < event.attempts.length - 1 && (
-                          <div className="flex relative z-10 py-2" style={{ marginLeft: '12px' }}>
-                            <span className="text-[10px] uppercase font-bold tracking-wider text-muted bg-surface px-2 py-1 rounded border border-border z-20 shadow-sm flex items-center gap-1.5">
-                              ↓ Retry
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Terminal Node for Success or DLQ */}
-                        {index === event.attempts.length - 1 && (event.status === 'processed' || event.status === 'retry_exhausted') && (
-                          <div className="flex relative z-10 pt-4 pb-2" style={{ marginLeft: '-15px' }}>
-                             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold uppercase tracking-wider bg-surface z-20 shadow-sm ${
-                               event.status === 'processed' 
-                               ? 'text-emerald-400 border-emerald-400/30' 
-                               : 'text-rose-400 border-rose-400/30'
-                             }`}>
-                               {event.status === 'processed' ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                               {event.status === 'processed' ? 'Delivered' : 'Retry Exhausted / Dead Lettered'}
-                             </div>
-                          </div>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
+                <AttemptTimeline attempts={event.attempts} eventStatus={event.status} />
               </div>
             </div>
           )}
@@ -414,73 +326,7 @@ export default function EventDetails() {
               <h3 className="font-semibold text-text">Lifecycle</h3>
             </div>
             <div className="p-6 relative">
-              <div className="absolute left-[35px] top-8 bottom-8 w-px bg-border"></div>
-
-              {/* Helper to determine which steps are done */}
-              {(() => {
-                const ORDER = ['received', 'queued', 'processing', 'processed'];
-                const currentIdx = ORDER.indexOf(event.status);
-                // 'failed' counts as after 'processing'
-                const failedIdx = event.status === 'failed' ? 3 : -1;
-
-                const steps = [
-                  { key: 'received',   label: 'Received',   time: event.receivedAt },
-                  { key: 'queued',     label: 'Queued',     time: null },
-                  { key: 'processing', label: 'Processing', time: null },
-                  { key: 'processed',  label: event.status === 'failed' ? 'Failed' : 'Processed', time: event.processedAt },
-                ];
-
-                return (
-                  <div className="space-y-6 relative z-10">
-                    {steps.map((step, idx) => {
-                      const isCurrent = event.status === step.key;
-                      const isDone = currentIdx > idx || (event.status === 'processed' && step.key === 'processed');
-                      const isFailed = event.status === 'failed' && step.key === 'processed';
-                      const isPending = !isDone && !isCurrent && !isFailed;
-
-                      let dotClass, icon;
-                      if (isFailed) {
-                        dotClass = 'bg-rose-400/20 border border-rose-400/30';
-                        icon = <XCircle className="w-4 h-4 text-rose-400" />;
-                      } else if (isDone) {
-                        dotClass = 'bg-emerald-400/20 border border-emerald-400/30';
-                        icon = <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
-                      } else if (isCurrent && step.key === 'processing') {
-                        dotClass = 'bg-violet-400/20 border border-violet-400/30';
-                        icon = <Loader2 className="w-4 h-4 text-violet-400 animate-spin" />;
-                      } else if (isCurrent && step.key === 'queued') {
-                        dotClass = 'bg-sky-400/20 border border-sky-400/30';
-                        icon = <Clock className="w-4 h-4 text-sky-400" />;
-                      } else if (isCurrent) {
-                        dotClass = 'bg-amber-400/20 border border-amber-400/30';
-                        icon = <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />;
-                      } else {
-                        dotClass = 'bg-surface border border-border';
-                        icon = <div className="w-2 h-2 rounded-full bg-muted"></div>;
-                      }
-
-                      return (
-                        <div key={step.key} className="flex items-start gap-4">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${dotClass}`}>
-                            {icon}
-                          </div>
-                          <div>
-                            <p className={`text-sm font-medium ${
-                              isFailed ? 'text-rose-400' :
-                              isDone || isCurrent ? 'text-text' : 'text-muted'
-                            }`}>{step.label}</p>
-                            {step.time && (
-                              <p className="text-xs text-muted">
-                                {format(new Date(step.time), 'HH:mm:ss.SSS')}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
+              <LifecycleTimeline event={event} />
             </div>
           </div>
           
