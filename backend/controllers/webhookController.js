@@ -148,7 +148,7 @@ const getEventsByProject = async (req, res) => {
     }
     
     // 3. Build dynamic query
-    const { status, endpointId, eventType, from, to, search } = req.query;
+    const { status, endpointId, eventType, from, to, search, sort, order } = req.query;
     const query = { projectId };
 
     if (status) query.status = status;
@@ -195,11 +195,16 @@ const getEventsByProject = async (req, res) => {
       ];
     }
 
+    // 3.5 Sort logic
+    const sortField = sort === 'receivedAt' ? 'receivedAt' : 'receivedAt';
+    const sortOrder = order === 'asc' ? 1 : -1;
+    const sortObj = { [sortField]: sortOrder, _id: sortOrder };
+
     // 4. Paginate and Query
     const skip = (page - 1) * limit;
     const total = await WebhookEvent.countDocuments(query);
     const rawEvents = await WebhookEvent.find(query)
-      .sort({ receivedAt: -1, _id: -1 })
+      .sort(sortObj)
       .skip(skip)
       .limit(limit);
 

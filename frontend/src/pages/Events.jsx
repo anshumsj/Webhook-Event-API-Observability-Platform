@@ -3,8 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useSocket } from '../context/SocketContext';
 import api from '../services/api';
-import { Activity, Clock, CheckCircle2, XCircle, Loader2, ChevronLeft, ChevronRight, FolderKanban, ArrowUp, Search, Filter, X } from 'lucide-react';
+import { Activity, Clock, FolderKanban, ArrowUp, Filter } from 'lucide-react';
 import { format } from 'date-fns';
+import EventFilters from '../components/EventFilters';
+import Pagination from '../components/Pagination';
+import EventStatusBadge from '../components/EventStatusBadge';
 
 export default function Events() {
   const { activeWorkspace } = useWorkspace();
@@ -14,6 +17,7 @@ export default function Events() {
 
   const urlPage = parseInt(searchParams.get('page'), 10) || 1;
   const urlProject = searchParams.get('project') || '';
+  const urlOrder = searchParams.get('order') === 'asc' ? 'asc' : 'desc';
 
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(urlProject);
@@ -31,6 +35,7 @@ export default function Events() {
   const [timeRangeFilter, setTimeRangeFilter] = useState('All');
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [sortOrder, setSortOrder] = useState(urlOrder);
 
   // Dropdown options
   const [endpoints, setEndpoints] = useState([]);
@@ -70,7 +75,7 @@ export default function Events() {
       setEndpoints([]);
       setEventTypes([]);
     }
-  }, [selectedProjectId, pagination.page, statusFilter, endpointFilter, eventTypeFilter, timeRangeFilter, debouncedSearch]);
+  }, [selectedProjectId, pagination.page, statusFilter, endpointFilter, eventTypeFilter, timeRangeFilter, debouncedSearch, sortOrder]);
 
   // Ref that always reflects the latest pagination state — never stale inside a closure.
   const paginationRef = useRef(pagination);
@@ -155,7 +160,12 @@ export default function Events() {
         setSelectedProjectId(current => {
           if (!current || !res.data.find(p => p._id === current)) {
             const defaultId = res.data[0]._id;
-            setSearchParams({ project: defaultId, page: 1 });
+            setSearchParams(prev => {
+              const p = new URLSearchParams(prev);
+              p.set('project', defaultId);
+              p.set('page', '1');
+              return p;
+            });
             setPagination(prev => ({ ...prev, page: 1 }));
             return defaultId;
           }
@@ -194,6 +204,7 @@ export default function Events() {
       if (endpointFilter) params.append('endpointId', endpointFilter);
       if (eventTypeFilter) params.append('eventType', eventTypeFilter);
       if (debouncedSearch) params.append('search', debouncedSearch);
+      if (sortOrder) params.append('order', sortOrder);
 
       if (timeRangeFilter && timeRangeFilter !== 'All') {
         const now = new Date();
@@ -224,40 +235,46 @@ export default function Events() {
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= pagination.totalPages) {
       setPagination(prev => ({ ...prev, page: newPage }));
-      setSearchParams({ project: selectedProjectId, page: newPage });
+      setSearchParams(prev => {
+        const p = new URLSearchParams(prev);
+        p.set('project', selectedProjectId);
+        p.set('page', newPage.toString());
+        return p;
+      });
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'processed':
-        return <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
-      case 'failed':
-      case 'retry_exhausted':
-        return <XCircle className="w-4 h-4 text-rose-400" />;
-      case 'processing':
-        return <Loader2 className="w-4 h-4 text-violet-400 animate-spin" />;
-      case 'queued':
-        return <Clock className="w-4 h-4 text-sky-400" />;
-      default: // received
-        return <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />;
+  const handleFilterChange = (type, value) => {
+    if (type === 'status') setStatusFilter(value);
+    if (type === 'endpoint') setEndpointFilter(value);
+    if (type === 'eventType') setEventTypeFilter(value);
+    if (type === 'timeRange') setTimeRangeFilter(value);
+    if (type === 'sortOrder') {
+      setSortOrder(value);
+      setSearchParams(prev => {
+        const p = new URLSearchParams(prev);
+        p.set('order', value);
+        p.set('page', '1');
+        return p;
+      });
     }
+    setPagination(prev => ({ ...prev, page: 1 }));
   };
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'processed':
-        return 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20';
-      case 'failed':
-      case 'retry_exhausted':
-        return 'bg-rose-400/10 text-rose-400 border-rose-400/20';
-      case 'processing':
-        return 'bg-violet-400/10 text-violet-400 border-violet-400/20';
-      case 'queued':
-        return 'bg-sky-400/10 text-sky-400 border-sky-400/20';
-      default: // received
-        return 'bg-amber-400/10 text-amber-400 border-amber-400/20';
-    }
+  const handleClearFilters = () => {
+    setStatusFilter('');
+    setEndpointFilter('');
+    setEventTypeFilter('');
+    setTimeRangeFilter('All');
+    setSearchInput('');
+    setSortOrder('desc');
+    setPagination(prev => ({ ...prev, page: 1 }));
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      p.set('order', 'desc');
+      p.set('page', '1');
+      return p;
+    });
   };
 
   if (!activeWorkspace) {
@@ -283,7 +300,12 @@ export default function Events() {
               const newProject = e.target.value;
               setSelectedProjectId(newProject);
               setPagination(prev => ({ ...prev, page: 1 }));
-              setSearchParams({ project: newProject, page: 1 });
+              setSearchParams(prev => {
+                const p = new URLSearchParams(prev);
+                p.set('project', newProject);
+                p.set('page', '1');
+                return p;
+              });
             }}
             disabled={projects.length === 0}
           >
@@ -309,82 +331,19 @@ export default function Events() {
 
       {/* Filter Bar */}
       {selectedProjectId && (
-        <div className="bg-surface border border-border rounded-xl p-4 shadow-sm flex flex-col md:flex-row gap-4 items-center flex-wrap">
-          <div className="flex-1 min-w-[200px] relative">
-            <Search className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search Event ID, Request ID, Type..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-background border border-border rounded-lg text-sm text-text focus:outline-none focus:border-primary transition-colors"
-            />
-          </div>
-
-          <select
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }}
-            className="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary text-text"
-          >
-            <option value="">All Statuses</option>
-            <option value="processed">Successful</option>
-            <option value="failed">Failed</option>
-            <option value="pending">Pending</option>
-            <option value="retry_exhausted">Dead Lettered</option>
-          </select>
-
-          <select
-            value={endpointFilter}
-            onChange={(e) => { setEndpointFilter(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }}
-            className="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary text-text max-w-[200px]"
-          >
-            <option value="">All Endpoints</option>
-            {endpoints.map(ep => (
-              <option key={ep._id} value={ep._id}>
-                {new URL(ep.destinationUrl).hostname}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={eventTypeFilter}
-            onChange={(e) => { setEventTypeFilter(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }}
-            className="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary text-text max-w-[200px]"
-          >
-            <option value="">All Event Types</option>
-            {eventTypes.map(et => (
-              <option key={et} value={et}>{et}</option>
-            ))}
-          </select>
-
-          <select
-            value={timeRangeFilter}
-            onChange={(e) => { setTimeRangeFilter(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }}
-            className="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary text-text"
-          >
-            <option value="All">All Time</option>
-            <option value="24h">Last 24 Hours</option>
-            <option value="7d">Last 7 Days</option>
-            <option value="30d">Last 30 Days</option>
-          </select>
-
-          {(statusFilter || endpointFilter || eventTypeFilter || timeRangeFilter !== 'All' || searchInput) && (
-            <button
-              onClick={() => {
-                setStatusFilter('');
-                setEndpointFilter('');
-                setEventTypeFilter('');
-                setTimeRangeFilter('All');
-                setSearchInput('');
-                setPagination(prev => ({ ...prev, page: 1 }));
-              }}
-              className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors bg-primary/10 px-3 py-2 rounded-lg font-medium"
-            >
-              <X className="w-3.5 h-3.5" />
-              Clear Filters
-            </button>
-          )}
-        </div>
+        <EventFilters
+          searchInput={searchInput}
+          setSearchInput={setSearchInput}
+          statusFilter={statusFilter}
+          endpointFilter={endpointFilter}
+          eventTypeFilter={eventTypeFilter}
+          timeRangeFilter={timeRangeFilter}
+          sortOrder={sortOrder}
+          endpoints={endpoints}
+          eventTypes={eventTypes}
+          onFilterChange={handleFilterChange}
+          onClearFilters={handleClearFilters}
+        />
       )}
 
       {error && (
@@ -456,10 +415,7 @@ export default function Events() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusBadge(event.status)}`}>
-                        {getStatusIcon(event.status)}
-                        <span className="capitalize">{event.status}</span>
-                      </div>
+                      <EventStatusBadge status={event.status} />
                     </td>
                     <td className="px-6 py-4 text-muted">
                       {format(new Date(event.receivedAt), 'MMM d, yyyy HH:mm:ss')}
@@ -480,30 +436,12 @@ export default function Events() {
             </table>
           </div>
 
-          {/* Pagination Controls */}
-          {pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-border px-6 py-3 bg-surface">
-              <p className="text-sm text-muted">
-                Showing page <span className="font-medium text-text">{pagination.page}</span> of <span className="font-medium text-text">{pagination.totalPages}</span> (Total: {pagination.total})
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handlePageChange(pagination.page - 1)}
-                  disabled={pagination.page <= 1}
-                  className="p-1 rounded-md bg-background border border-border text-text hover:bg-white/5 disabled:opacity-50 transition-colors"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => handlePageChange(pagination.page + 1)}
-                  disabled={pagination.page >= pagination.totalPages}
-                  className="p-1 rounded-md bg-background border border-border text-text hover:bg-white/5 disabled:opacity-50 transition-colors"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-          )}
+          <Pagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            onPageChange={handlePageChange}
+          />
         </div>
       )}
     </div>

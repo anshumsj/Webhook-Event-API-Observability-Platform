@@ -106,15 +106,8 @@ async function runTests() {
   const crypto = require('crypto');
   const expectedSig = crypto.createHmac('sha256', 'newsecret123').update(JSON.stringify({ replay: "test" })).digest('hex');
   const actualSig = replayAttempt3.requestHeaders?.get ? replayAttempt3.requestHeaders.get('X-HookSight-Signature') : replayAttempt3.requestHeaders['X-HookSight-Signature'];
-  // The header in the DB is redacted by the save hook!
-  // Wait, if it's redacted, how do I check it?
-  // The DeliveryAttempt model redacts it before saving:
-  // requestHeaders.set('X-HookSight-Signature', '[REDACTED]')
-  // Let's just assert that it's [REDACTED], or we can't test the actual value in DB.
-  // Actually, wait, the deliveryService logs or something?
-  // We can't verify the exact signature in the DB because it's redacted!
-  if (actualSig !== '[REDACTED]') throw new Error(`Expected [REDACTED], got ${actualSig}`);
-  console.log('[PASS] Fresh signature is generated (verified via redaction presence)');
+  if (actualSig !== `sha256=${expectedSig}`) throw new Error(`Expected sha256=${expectedSig}, got ${actualSig}`);
+  console.log('[PASS] Fresh signature is generated and stored correctly');
 
   // Test 2: Cannot replay non-terminal state
   const pendingEvent = await WebhookEvent.create({

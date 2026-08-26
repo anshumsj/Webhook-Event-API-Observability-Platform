@@ -108,6 +108,51 @@ async function testFilters() {
   if (resIso.statusCode !== 403) throw new Error(`Isolation failed, expected 403 but got ${resIso.statusCode}`);
   console.log(`[PASS] Isolation test (foreign endpoint)`);
 
+  // Sorting tests
+  const sortTests = [
+    {
+      name: 'Default sorting (No sort/order -> newest first)',
+      query: {},
+      expectedOrder: [e1.eventId, e2.eventId, e3.eventId]
+    },
+    {
+      name: 'Oldest-first sorting (order=asc)',
+      query: { order: 'asc' },
+      expectedOrder: [e3.eventId, e2.eventId, e1.eventId]
+    },
+    {
+      name: 'Invalid sorting (fallback to newest-first)',
+      query: { sort: 'payload', order: 'DROP_TABLE' },
+      expectedOrder: [e1.eventId, e2.eventId, e3.eventId]
+    },
+    {
+      name: 'Combined filtering + sorting (endpoint 1 + asc)',
+      query: { endpointId: String(endpoint1._id), order: 'asc' },
+      expectedOrder: [e3.eventId, e1.eventId]
+    },
+    {
+      name: 'Pagination + sorting (asc page 1, limit 1)',
+      query: { order: 'asc', page: 1, limit: 1 },
+      expectedOrder: [e3.eventId]
+    }
+  ];
+
+  for (const tc of sortTests) {
+    const req = {
+      params: { projectId: project._id },
+      query: tc.query,
+      user: { id: userId }
+    };
+    const res = mockResponse();
+    await getEventsByProject(req, res);
+    if (res.statusCode !== 200) throw new Error(`[${tc.name}] Failed with ${res.statusCode}`);
+    const returnedIds = res.data.events.map(e => e.eventId);
+    if (JSON.stringify(returnedIds) !== JSON.stringify(tc.expectedOrder)) {
+      throw new Error(`[${tc.name}] Expected ${JSON.stringify(tc.expectedOrder)}, got ${JSON.stringify(returnedIds)}`);
+    }
+    console.log(`[PASS] ${tc.name}`);
+  }
+
   // Event types test
   const reqTypes = { params: { projectId: project._id }, user: { id: userId } };
   const resTypes = mockResponse();

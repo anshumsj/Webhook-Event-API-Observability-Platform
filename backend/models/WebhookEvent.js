@@ -61,6 +61,7 @@ const webhookEventSchema = new mongoose.Schema({
 
 // Compound index for optimal event listing & pagination
 webhookEventSchema.index({ projectId: 1, receivedAt: -1, _id: -1 });
+webhookEventSchema.index({ projectId: 1, eventType: 1 });
 
 const WebhookEvent = mongoose.model('WebhookEvent', webhookEventSchema);
 

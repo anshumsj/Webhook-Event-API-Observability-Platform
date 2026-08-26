@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { RotateCcw } from 'lucide-react';
 import AttemptTimeline from '../components/AttemptTimeline';
 import LifecycleTimeline from '../components/LifecycleTimeline';
+import EventStatusBadge from '../components/EventStatusBadge';
 
 export default function EventDetails() {
   const { eventId } = useParams();
@@ -83,38 +84,6 @@ export default function EventDetails() {
       socket.emit('leave_project', projectId);
     };
   }, [socket, event?.projectId, eventId]);
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'processed':
-        return <CheckCircle2 className="w-5 h-5 text-emerald-400" />;
-      case 'failed':
-      case 'retry_exhausted':
-        return <XCircle className="w-5 h-5 text-rose-400" />;
-      case 'processing':
-        return <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />;
-      case 'queued':
-        return <Clock className="w-5 h-5 text-sky-400" />;
-      default: // received
-        return <Loader2 className="w-5 h-5 text-amber-400 animate-spin" />;
-    }
-  };
-
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'processed':
-        return 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20';
-      case 'failed':
-      case 'retry_exhausted':
-        return 'bg-rose-400/10 text-rose-400 border-rose-400/20';
-      case 'processing':
-        return 'bg-violet-400/10 text-violet-400 border-violet-400/20';
-      case 'queued':
-        return 'bg-sky-400/10 text-sky-400 border-sky-400/20';
-      default: // received
-        return 'bg-amber-400/10 text-amber-400 border-amber-400/20';
-    }
-  };
 
   if (loading) {
     return (
@@ -205,10 +174,7 @@ export default function EventDetails() {
         <div>
           <h1 className="text-2xl font-bold text-text flex items-center gap-3">
             Event Details
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium border ${getStatusBadge(event.status)}`}>
-              {getStatusIcon(event.status)}
-              <span className="capitalize">{event.status}</span>
-            </span>
+            <EventStatusBadge status={event.status} size="lg" />
           </h1>
           <p className="text-muted mt-1 font-mono text-sm">{event.eventId}</p>
         </div>
