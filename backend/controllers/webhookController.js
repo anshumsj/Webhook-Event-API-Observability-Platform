@@ -385,7 +385,7 @@ const replayEvent = async (req, res) => {
     // 3. Verify terminal state
     const terminalStates = ['processed', 'failed', 'retry_exhausted'];
     if (!terminalStates.includes(event.status)) {
-      return res.status(400).json({ message: `Cannot replay event in non-terminal state: ${event.status}` });
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: `Cannot replay event in non-terminal state: ${event.status}`, requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 4. Fetch endpoint and check availability

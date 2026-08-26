@@ -42,7 +42,7 @@ const protect = async (req, res, next) => {
         return next();
       } catch (error) {
         console.error('API Key middleware error:', error);
-        return res.status(401).json({ message: 'Not authorized, API key failed' });
+        return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Not authorized, API key failed', requestId: req ? req.requestId : 'unknown' } });
       }
     }
 
@@ -53,12 +53,12 @@ const protect = async (req, res, next) => {
       return next();
     } catch (error) {
       console.error('JWT middleware error:', error.message);
-      return res.status(401).json({ message: 'Not authorized, token failed' });
+      return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Not authorized, token failed', requestId: req ? req.requestId : 'unknown' } });
     }
   }
 
   if (!token) {
-    return res.status(401).json({ message: 'Not authorized, no token provided' });
+    return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Not authorized, no token provided', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 

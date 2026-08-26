@@ -11,6 +11,7 @@ const DeliveryAttempt = require('./models/DeliveryAttempt');
 async function runTest() {
   const baseURL = 'http://localhost:3001/api';
   let mockServer;
+  let email1, workspaceId, projectId1;
 
   try {
     await mongoose.connect(process.env.MONGODB_URI);
@@ -34,7 +35,7 @@ async function runTest() {
     console.log('-> Mock Destination Server running on port 3002');
 
     // ---- SETUP USER 1 & WORKSPACE & PROJECT ----
-    const email1 = `test_rel_${Date.now()}@test.com`;
+    email1 = `test_rel_${Date.now()}@test.com`;
     const password = 'password123';
     await axios.post(`${baseURL}/auth/register`, { name: 'User Rel', email: email1, password });
     const loginRes1 = await axios.post(`${baseURL}/auth/login`, { email: email1, password });
@@ -42,10 +43,10 @@ async function runTest() {
     const api1 = axios.create({ baseURL, headers: { Authorization: `Bearer ${token1}` } });
     
     const wsRes = await api1.post('/workspaces', { name: 'Workspace Rel' });
-    const workspaceId = wsRes.data._id;
+    workspaceId = wsRes.data._id;
     
     const p1Res = await api1.post('/projects', { name: 'Project Rel', workspaceId });
-    const projectId1 = p1Res.data._id;
+    projectId1 = p1Res.data._id;
     
     // ---- 1. TEST LARGE RESPONSE (OOM PROTECTION) ----
     console.log('\n-> Testing Large Response Bounding (1MB limit)...');
@@ -77,8 +78,6 @@ async function runTest() {
     }
 
     console.log('\n✅ Reliability Tests completed successfully!');
-    if (mockServer) mockServer.close();
-    process.exit(0);
   } catch(e) {
     console.error('\n❌ Test failed:');
     if (e.response) {
@@ -86,8 +85,26 @@ async function runTest() {
     } else {
       console.error(e.message);
     }
+    process.exitCode = 1;
+  } finally {
+    console.log('\n-> Cleaning up test data...');
+    if (projectId1) {
+      const eventIds = await WebhookEvent.find({ projectId: projectId1 }).distinct('_id');
+      await DeliveryAttempt.deleteMany({ webhookEventId: { $in: eventIds } });
+      await WebhookEvent.deleteMany({ projectId: projectId1 });
+      await WebhookEndpoint.deleteMany({ projectId: projectId1 });
+      await Project.findByIdAndDelete(projectId1);
+    }
+    if (workspaceId) {
+      const Workspace = require('./models/Workspace');
+      await Workspace.findByIdAndDelete(workspaceId);
+    }
+    if (email1) {
+      const User = require('./models/User');
+      await User.deleteOne({ email: email1 });
+    }
     if (mockServer) mockServer.close();
-    process.exit(1);
+    process.exit();
   }
 }
 

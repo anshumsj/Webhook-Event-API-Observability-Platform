@@ -52,11 +52,11 @@ app.use((err, req, res, next) => {
   // Catch malformed JSON requests gracefully
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
     console.error(`[${req.requestId || 'sys'}] Malformed JSON request: ${err.message}`);
-    return res.status(400).json({ success: false, message: 'Invalid JSON payload' });
+    return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid JSON payload', requestId: req ? req.requestId : 'unknown' } });
   }
   // Catch oversized JSON requests
   if (err.type === 'entity.too.large' && err.status === 413) {
-    return res.status(413).json({ success: false, message: 'Payload too large' });
+    return res.status(413).json({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'Payload too large', requestId: req ? req.requestId : 'unknown' } });
   }
   next(err);
 });

@@ -6,7 +6,7 @@ const register = async (req, res) => {
 
     // Validate input
     if (!name || !email || !password) {
-      return res.status(400).json({ message: 'Please provide name, email, and password' });
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Please provide name, email, and password', requestId: req ? req.requestId : 'unknown' } });
     }
 
     if (password.length < 6) {

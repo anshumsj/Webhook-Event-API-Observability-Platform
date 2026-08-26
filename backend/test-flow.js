@@ -9,11 +9,12 @@ const Project = require('./models/Project');
 async function runTest() {
   const baseURL = 'http://localhost:3001/api';
   
+  let email1, email2, workspaceId, projectId1;
   try {
     await mongoose.connect(process.env.MONGODB_URI);
 
     // ---- SETUP USER 1 & WORKSPACE & PROJECT ----
-    const email1 = `test1_${Date.now()}@test.com`;
+    email1 = `test1_${Date.now()}@test.com`;
     const password = 'password123';
     
     console.log('-> Registering User 1...');
@@ -26,11 +27,11 @@ async function runTest() {
     
     console.log('-> Creating Workspace for User 1...');
     const wsRes = await api1.post('/workspaces', { name: 'Workspace 1' });
-    const workspaceId = wsRes.data._id;
+    workspaceId = wsRes.data._id;
     
     console.log('-> Creating Project 1...');
     const p1Res = await api1.post('/projects', { name: 'Project 1', workspaceId });
-    const projectId1 = p1Res.data._id;
+    projectId1 = p1Res.data._id;
     
     // ---- INJECT ENDPOINT DIRECTLY ----
     console.log('-> Mocking Endpoint in DB...');
@@ -62,7 +63,7 @@ async function runTest() {
     events.forEach(e => console.log(`   - ID: ${e.eventId} | Type: ${e.eventType} | Status: ${e.status}`));
     
     // ---- TEST AUTHORIZATION ----
-    const email2 = `test2_${Date.now()}@test.com`;
+    email2 = `test2_${Date.now()}@test.com`;
     console.log('\n-> Registering User 2...');
     await axios.post(`${baseURL}/auth/register`, { name: 'User 2', email: email2, password });
     const loginRes2 = await axios.post(`${baseURL}/auth/login`, { email: email2, password });
@@ -81,7 +82,6 @@ async function runTest() {
     }
     
     console.log('\n✅ End-to-end Event Test completed successfully!');
-    process.exit(0);
   } catch(e) {
     console.error('\n❌ Test failed:');
     if (e.response) {
@@ -89,7 +89,29 @@ async function runTest() {
     } else {
       console.error(e.message);
     }
-    process.exit(1);
+    process.exitCode = 1;
+  } finally {
+    console.log('\n-> Cleaning up test data...');
+    if (projectId1) {
+      const WebhookEvent = require('./models/WebhookEvent');
+      const DeliveryAttempt = require('./models/DeliveryAttempt');
+      
+      const eventIds = await WebhookEvent.find({ projectId: projectId1 }).distinct('_id');
+      await DeliveryAttempt.deleteMany({ webhookEventId: { $in: eventIds } });
+      await WebhookEvent.deleteMany({ projectId: projectId1 });
+      await WebhookEndpoint.deleteMany({ projectId: projectId1 });
+      await Project.findByIdAndDelete(projectId1);
+    }
+    if (workspaceId) {
+      const Workspace = require('./models/Workspace');
+      await Workspace.findByIdAndDelete(workspaceId);
+    }
+    if (email1 || email2) {
+      const User = require('./models/User');
+      if (email1) await User.deleteOne({ email: email1 });
+      if (email2) await User.deleteOne({ email: email2 });
+    }
+    process.exit();
   }
 }
 runTest();

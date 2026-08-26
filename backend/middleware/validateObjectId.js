@@ -7,7 +7,7 @@ const validateObjectId = (paramNames) => {
     for (const name of names) {
       const id = req.params[name];
       if (id && !mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({ message: `Invalid ${name} format` });
+        return res.status(400).json({ error: { code: 'BAD_REQUEST', message: `Invalid ${name} format`, requestId: req ? req.requestId : 'unknown' } });
       }
     }
     
