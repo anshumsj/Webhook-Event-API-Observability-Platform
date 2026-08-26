@@ -144,20 +144,12 @@ export default function EventDetails() {
   
   let totalDurationDisplay = 'In Progress';
   if (event.status === 'processed' || event.status === 'failed' || event.status === 'retry_exhausted') {
-    const start = new Date(event.receivedAt).getTime();
-    let end = event.processedAt ? new Date(event.processedAt).getTime() : null;
-    
-    if (totalAttempts > 0) {
-      const lastAttempt = event.attempts[totalAttempts - 1];
-      if (lastAttempt.completedAt) {
-        end = new Date(lastAttempt.completedAt).getTime();
-      }
-    }
-    
-    if (end && !isNaN(end) && !isNaN(start)) {
-      const ms = end - start;
+    if (event.processingTimeMs != null && !isNaN(event.processingTimeMs)) {
+      const ms = event.processingTimeMs;
       if (ms < 1000) totalDurationDisplay = `${ms} ms`;
       else totalDurationDisplay = `${(ms / 1000).toFixed(2)} s`;
+    } else {
+      totalDurationDisplay = 'Unknown';
     }
   }
 
