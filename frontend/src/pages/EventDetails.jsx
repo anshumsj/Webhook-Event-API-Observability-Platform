@@ -4,6 +4,7 @@ import api from '../services/api';
 import { useSocket } from '../context/SocketContext';
 import { ArrowLeft, Clock, CheckCircle2, XCircle, Loader2, Database, Braces, AlignLeft, Box, Activity } from 'lucide-react';
 import { format } from 'date-fns';
+import { RotateCcw } from 'lucide-react';
 import AttemptTimeline from '../components/AttemptTimeline';
 import LifecycleTimeline from '../components/LifecycleTimeline';
 
@@ -15,6 +16,21 @@ export default function EventDetails() {
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [replaying, setReplaying] = useState(false);
+  const [replayError, setReplayError] = useState(null);
+  const [replaySuccess, setReplaySuccess] = useState(null);
+
+  const fetchEventDetails = async () => {
+    try {
+      const res = await api.get(`/events/${eventId}`);
+      setEvent(res.data);
+    } catch (err) {
+      console.error('Error fetching event details:', err);
+      setError('Failed to load event details or you do not have permission.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleBack = () => {
     const searchString = location.state?.search ? `?${location.state.search}` : '';
@@ -22,20 +38,26 @@ export default function EventDetails() {
   };
 
   useEffect(() => {
-    const fetchEventDetails = async () => {
-      try {
-        const res = await api.get(`/events/${eventId}`);
-        setEvent(res.data);
-      } catch (err) {
-        console.error('Error fetching event details:', err);
-        setError('Failed to load event details or you do not have permission.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
     fetchEventDetails();
   }, [eventId]);
+
+  const handleReplay = async () => {
+    if (replaying) return;
+    setReplaying(true);
+    setReplayError(null);
+    setReplaySuccess(null);
+    try {
+      await api.post(`/events/${eventId}/replay`);
+      setReplaySuccess('Replay successfully queued');
+      // Wait a moment for worker to process, then refresh to show new attempt
+      setTimeout(() => fetchEventDetails(), 1000);
+      setTimeout(() => fetchEventDetails(), 3000); // Poll again
+    } catch (err) {
+      setReplayError(err.response?.data?.message || 'Failed to queue replay');
+    } finally {
+      setReplaying(false);
+    }
+  };
 
   // Listen for the worker's 'processed' update — patch status/timing in-place.
   // Join the project room once the event is loaded so we receive targeted updates.
@@ -190,6 +212,25 @@ export default function EventDetails() {
           </h1>
           <p className="text-muted mt-1 font-mono text-sm">{event.eventId}</p>
         </div>
+        
+        {['processed', 'failed', 'retry_exhausted'].includes(event.status) && (
+          <div className="ml-auto flex items-center gap-3">
+            {replayError && <span className="text-sm text-rose-400">{replayError}</span>}
+            {replaySuccess && <span className="text-sm text-emerald-400">{replaySuccess}</span>}
+            <button
+              onClick={handleReplay}
+              disabled={replaying}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                replaying 
+                  ? 'bg-primary/50 text-white/70 cursor-not-allowed' 
+                  : 'bg-primary text-white hover:bg-primary/90'
+              }`}
+            >
+              {replaying ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+              {replaying ? 'Queuing...' : 'Replay Event'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

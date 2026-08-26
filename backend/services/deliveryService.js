@@ -20,7 +20,7 @@ const TIMEOUT_MS = 10000; // 10 seconds
  * @returns {Object} { status, statusText } on success (2xx).
  * @throws {Error} On network failure, timeout, or non-2xx status code.
  */
-const deliverWebhook = async (eventDoc, destinationUrl, endpointSecret) => {
+const deliverWebhook = async (eventDoc, destinationUrl, endpointSecret, attemptNumber = 1) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -30,7 +30,7 @@ const deliverWebhook = async (eventDoc, destinationUrl, endpointSecret) => {
     'User-Agent': 'HookSight-Delivery-Agent/1.0',
     'X-HookSight-Event-Id': eventDoc.eventId,
     'X-HookSight-Event-Type': eventDoc.eventType,
-    'Idempotency-Key': eventDoc.eventId
+    'Idempotency-Key': `${eventDoc.eventId}-attempt-${attemptNumber}`
   };
 
   // Forward x-github-event if it was present in the original headers

@@ -34,27 +34,34 @@ const buildSocketPayload = (doc) => ({
  * @param {Function|null} emitFn  (room, event, payload) => void
  */
 const buildProcessor = (emitFn) => async (job) => {
-  const { eventId, projectId, processingTimeMs: ingestMs } = job.data;
+  const { eventId, projectId, processingTimeMs: ingestMs, isManualReplay } = job.data;
   const workerStart = Date.now();
 
   console.log(`[Worker] ▶ Job ${job.id} | eventId: ${eventId} | attempt: ${job.attemptsMade + 1}/${RETRY_ATTEMPTS}`);
 
-  // ── Step 1: Mark as 'processing' ────────────────────────────────────────────
-  const processingDoc = await WebhookEvent.findOneAndUpdate(
-    { eventId },
-    { status: 'processing' },
-    { new: true }
-  );
-
-  if (!processingDoc) {
-    console.warn(`[Worker] ⚠  Event not found, skipping: ${eventId}`);
-    return;
-  }
-
-  console.log(`[Worker] ⚙  Processing | eventId: ${eventId}`);
-
-  if (typeof emitFn === 'function') {
-    emitFn(`project:${projectId}`, 'webhook:event:updated', buildSocketPayload(processingDoc));
+  // ── Step 1: Mark as 'processing' (or just fetch if replay) ───────────────────
+  let processingDoc;
+  if (isManualReplay) {
+    processingDoc = await WebhookEvent.findOne({ eventId });
+    if (!processingDoc) {
+      console.warn(`[Worker] ⚠  Event not found, skipping manual replay: ${eventId}`);
+      return;
+    }
+    console.log(`[Worker] ⚙  Manual Replay | eventId: ${eventId}`);
+  } else {
+    processingDoc = await WebhookEvent.findOneAndUpdate(
+      { eventId },
+      { status: 'processing' },
+      { new: true }
+    );
+    if (!processingDoc) {
+      console.warn(`[Worker] ⚠  Event not found, skipping: ${eventId}`);
+      return;
+    }
+    console.log(`[Worker] ⚙  Processing | eventId: ${eventId}`);
+    if (typeof emitFn === 'function') {
+      emitFn(`project:${projectId}`, 'webhook:event:updated', buildSocketPayload(processingDoc));
+    }
   }
 
   // ── Step 2: Do actual processing work ───────────────────────────────────────
@@ -71,22 +78,38 @@ const buildProcessor = (emitFn) => async (job) => {
     statusToSet = 'failed';
   } else {
     // 2. Deliver the webhook
-    const attemptNumber = job.attemptsMade + 1;
+    let attemptNumber;
+    if (isManualReplay) {
+      const lastAttempt = await DeliveryAttempt.findOne({ webhookEventId: processingDoc._id }).sort({ attemptNumber: -1 });
+      attemptNumber = lastAttempt ? lastAttempt.attemptNumber + 1 : 1;
+    } else {
+      attemptNumber = job.attemptsMade + 1;
+    }
     const attemptStart = Date.now();
     
-    let attemptDoc = await DeliveryAttempt.create({
-      webhookEventId: processingDoc._id,
-      endpointId: endpoint._id,
-      attemptNumber,
-      status: 'pending',
-      startedAt: new Date(attemptStart),
-      destinationUrl: endpoint.destinationUrl,
-      requestMethod: 'POST'
-    });
+    let attemptDoc;
+    try {
+      attemptDoc = await DeliveryAttempt.create({
+        webhookEventId: processingDoc._id,
+        endpointId: endpoint._id,
+        attemptNumber,
+        attemptType: isManualReplay ? 'manual' : 'automatic',
+        status: 'pending',
+        startedAt: new Date(attemptStart),
+        destinationUrl: endpoint.destinationUrl,
+        requestMethod: 'POST'
+      });
+    } catch (createErr) {
+      if (createErr.code === 11000 && isManualReplay) {
+        console.error(`[Worker] ❌ Race condition: attempt ${attemptNumber} already exists for manual replay ${eventId}`);
+        return;
+      }
+      throw createErr;
+    }
 
     const { deliverWebhook } = require('../services/deliveryService');
     try {
-      const result = await deliverWebhook(processingDoc, endpoint.destinationUrl, endpoint.secret);
+      const result = await deliverWebhook(processingDoc, endpoint.destinationUrl, endpoint.secret, attemptNumber);
       
       // Success (2xx)
       await DeliveryAttempt.findByIdAndUpdate(attemptDoc._id, {
@@ -112,24 +135,30 @@ const buildProcessor = (emitFn) => async (job) => {
         responseHeaders: error.responseHeaders
       });
       
-      // Rethrow so BullMQ retries
-      throw error;
+      // Rethrow so BullMQ retries (only if automatic)
+      if (!isManualReplay) {
+        throw error;
+      }
     }
   }
 
-  const totalMs = ingestMs + (Date.now() - workerStart);
+  const totalMs = isManualReplay ? 0 : ingestMs + (Date.now() - workerStart);
 
   // ── Step 3: Mark as 'processed' (or 'failed' if skipped) ──────────────────
-  const finalDoc = await WebhookEvent.findOneAndUpdate(
-    { eventId },
-    { status: statusToSet, processedAt: new Date(), processingTimeMs: totalMs },
-    { new: true }
-  );
+  if (!isManualReplay) {
+    const finalDoc = await WebhookEvent.findOneAndUpdate(
+      { eventId },
+      { status: statusToSet, processedAt: new Date(), processingTimeMs: totalMs },
+      { new: true }
+    );
 
-  console.log(`[Worker] ${statusToSet === 'processed' ? '✓ Processed' : '❌ Failed (No Destination)'} | eventId: ${eventId} | ${totalMs}ms`);
+    console.log(`[Worker] ${statusToSet === 'processed' ? '✓ Processed' : '❌ Failed (No Destination)'} | eventId: ${eventId} | ${totalMs}ms`);
 
-  if (typeof emitFn === 'function') {
-    emitFn(`project:${projectId}`, 'webhook:event:updated', buildSocketPayload(finalDoc));
+    if (typeof emitFn === 'function') {
+      emitFn(`project:${projectId}`, 'webhook:event:updated', buildSocketPayload(finalDoc));
+    }
+  } else {
+    console.log(`[Worker] ✓ Manual Replay Attempt Finished | eventId: ${eventId}`);
   }
 };
 

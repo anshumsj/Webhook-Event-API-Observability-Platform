@@ -17,6 +17,11 @@ const deliveryAttemptSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  attemptType: {
+    type: String,
+    enum: ['automatic', 'manual'],
+    default: 'automatic'
+  },
   status: {
     type: String,
     enum: ['pending', 'success', 'failed', 'timeout'],

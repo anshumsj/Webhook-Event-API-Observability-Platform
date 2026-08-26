@@ -121,6 +121,11 @@ export default function AttemptTimeline({ attempts, eventStatus, eventPayload })
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2">
                       <h4 className={`font-semibold text-base flex items-center gap-2 ${isSuccess ? 'text-emerald-400' : isFailed ? 'text-rose-400' : 'text-amber-400'}`}>
                         Attempt #{attempt.attemptNumber}
+                        {attempt.attemptType === 'manual' && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/20 border border-primary/30 uppercase tracking-wider text-primary">
+                            Manual Replay
+                          </span>
+                        )}
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 border border-white/10 uppercase tracking-wider text-muted">
                           {attempt.status}
                         </span>
@@ -264,7 +269,7 @@ export default function AttemptTimeline({ attempts, eventStatus, eventPayload })
               {index < attempts.length - 1 && (
                 <div className="flex relative z-10 py-2" style={{ marginLeft: '12px' }}>
                   <span className="text-[10px] uppercase font-bold tracking-wider text-muted bg-surface px-2 py-1 rounded border border-border z-20 shadow-sm flex items-center gap-1.5">
-                    ↓ Retry
+                    ↓ {attempts[index + 1]?.attemptType === 'manual' ? 'Manual Replay' : 'Retry'}
                   </span>
                 </div>
               )}

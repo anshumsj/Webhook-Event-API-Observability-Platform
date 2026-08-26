@@ -360,9 +360,69 @@ const getProjectEventTypes = async (req, res) => {
   }
 };
 
+const replayEvent = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    // 1. Fetch event
+    const event = await WebhookEvent.findOne({ eventId });
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // 2. Fetch project and authorize via workspace
+    const project = await Project.findById(event.projectId);
+    if (!project) {
+      return res.status(404).json({ message: 'Project associated with event not found' });
+    }
+
+    const workspace = await Workspace.findOne({
+      _id: project.workspaceId,
+      $or: [{ owner: req.user.id }, { members: req.user.id }]
+    });
+
+    if (!workspace) {
+      return res.status(403).json({ message: 'Not authorized to access this event' });
+    }
+
+    // 3. Verify terminal state
+    const terminalStates = ['processed', 'failed', 'retry_exhausted'];
+    if (!terminalStates.includes(event.status)) {
+      return res.status(400).json({ message: `Cannot replay event in non-terminal state: ${event.status}` });
+    }
+
+    // 4. Fetch endpoint and check availability
+    const endpoint = await WebhookEndpoint.findById(event.endpointId);
+    if (!endpoint || !endpoint.destinationUrl) {
+      return res.status(400).json({ message: 'Cannot replay: Endpoint is unavailable or deleted' });
+    }
+
+    // 5. Queue the replay job
+    const queue = getWebhookQueue();
+    await queue.add('process-webhook', {
+      eventId: event.eventId,
+      projectId: String(event.projectId),
+      endpointId: String(event.endpointId),
+      isManualReplay: true,
+      processingTimeMs: 0
+    }, {
+      attempts: 1 // ensure BullMQ doesn't retry this manual job
+    });
+
+    res.status(202).json({
+      success: true,
+      message: 'Replay successfully queued'
+    });
+  } catch (error) {
+    console.error('Error replaying event:', error);
+    res.status(500).json({ message: 'Server error queueing replay' });
+  }
+};
+
 module.exports = {
   ingestWebhook,
   getEventsByProject,
   getEventById,
-  getProjectEventTypes
+  getProjectEventTypes,
+  replayEvent
 };
