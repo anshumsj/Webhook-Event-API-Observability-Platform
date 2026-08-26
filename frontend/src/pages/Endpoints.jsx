@@ -301,7 +301,7 @@ export default function Endpoints() {
                     <div className="flex items-center gap-3">
                       <div className="flex-1 relative">
                         <code className="block p-3 bg-background border border-border rounded-lg text-sm text-text font-mono pr-12">
-                          {showSecret ? endpoint.secret : '•'.repeat(48)}
+                          {showSecret ? (endpoint.secret || 'Hidden for security') : '•'.repeat(48)}
                         </code>
                         <button
                           onClick={() => setShowSecret(!showSecret)}

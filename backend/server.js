@@ -1,4 +1,10 @@
 require('dotenv').config();
+
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL ERROR: JWT_SECRET is not defined.');
+  process.exit(1);
+}
+
 const express = require('express');
 const http = require('http');
 const connectDB = require('./config/database');
@@ -21,12 +27,23 @@ connectRedis();
 const cors = require('cors');
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests from any localhost port (handles Vite port changes like 5173, 5174, etc.)
-    if (!origin || /^http:\/\/localhost(:\d+)?$/.test(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+    // 1. In development, allow localhost (handles Vite dev ports)
+    if (process.env.NODE_ENV !== 'production') {
+      if (!origin || /^http:\/\/localhost(:\d+)?$/.test(origin)) {
+        return callback(null, true);
+      }
     }
+
+    // 2. In all environments, check explicitly allowed origins
+    if (process.env.ALLOWED_ORIGINS) {
+      const allowedOrigins = process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(o => o);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+    }
+
+    // If none matched, deny
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true
 }));
@@ -78,3 +95,4 @@ startWorker((room, event, payload) => {
 server.listen(port, () => {
   console.log(`Backend server listening on port ${port}`);
 });
+// Nodemon trigger

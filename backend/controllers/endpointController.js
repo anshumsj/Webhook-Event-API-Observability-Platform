@@ -24,7 +24,7 @@ const getEndpointsByProject = async (req, res) => {
     }
 
     // 3. Fetch endpoints for the project
-    const endpoints = await WebhookEndpoint.find({ projectId });
+    const endpoints = await WebhookEndpoint.find({ projectId }).select('-secret');
     
     res.status(200).json(endpoints);
   } catch (error) {

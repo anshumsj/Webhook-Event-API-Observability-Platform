@@ -31,7 +31,7 @@ const registerUser = async (userData) => {
 
   const token = jwt.sign(
     payload, 
-    process.env.JWT_SECRET || 'fallback_secret', 
+    process.env.JWT_SECRET, 
     { expiresIn: '1d' }
   );
 
@@ -60,7 +60,7 @@ const loginUser = async (email, password) => {
 
   const token = jwt.sign(
     payload, 
-    process.env.JWT_SECRET || 'fallback_secret', 
+    process.env.JWT_SECRET, 
     { expiresIn: '1d' }
   );
 
