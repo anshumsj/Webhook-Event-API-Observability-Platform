@@ -11,7 +11,8 @@ const projectSchema = new mongoose.Schema({
   workspaceId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Workspace',
-    required: [true, 'Workspace ID is required']
+    required: [true, 'Workspace ID is required'],
+    index: true
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,

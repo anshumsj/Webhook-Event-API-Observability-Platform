@@ -21,8 +21,19 @@ const classifyEndpointHealth = (successRate, avgLatency, completedAttempts) => {
   return 'degraded';
 };
 
-const getProjectAnalytics = async (projectId) => {
+const getProjectAnalytics = async (projectId, timeRange = '30d') => {
   const objectId = new mongoose.Types.ObjectId(projectId);
+
+  // Calculate time boundary
+  let since = new Date();
+  if (timeRange === '24h') {
+    since.setHours(since.getHours() - 24);
+  } else if (timeRange === '7d') {
+    since.setDate(since.getDate() - 7);
+  } else {
+    since.setDate(since.getDate() - 30);
+    timeRange = '30d';
+  }
 
   // 1. Get endpoints for the project to scope DeliveryAttempt queries
   const endpoints = await WebhookEndpoint.find({ projectId: objectId }).select('_id');
@@ -30,7 +41,7 @@ const getProjectAnalytics = async (projectId) => {
 
   // 2. Aggregate WebhookEvents
   const eventAgg = await WebhookEvent.aggregate([
-    { $match: { projectId: objectId } },
+    { $match: { projectId: objectId, receivedAt: { $gte: since } } },
     { $group: {
         _id: null,
         totalEvents: { $sum: 1 },
@@ -53,7 +64,7 @@ const getProjectAnalytics = async (projectId) => {
   // 3. Aggregate DeliveryAttempts (if there are endpoints)
   if (endpointIds.length > 0) {
     const attemptAgg = await DeliveryAttempt.aggregate([
-      { $match: { endpointId: { $in: endpointIds } } },
+      { $match: { endpointId: { $in: endpointIds }, startedAt: { $gte: since } } },
       { $facet: {
           retryStats: [
             { $group: { _id: "$webhookEventId", attemptCount: { $sum: 1 } } },
@@ -88,21 +99,28 @@ const getProjectAnalytics = async (projectId) => {
     retryExhaustedEvents: eventStats.retryExhaustedEvents,
     successRate: Math.round(successRate * 100) / 100,
     retryRate: Math.round(retryRate * 100) / 100,
-    averageLatencyMs: Math.round(averageLatencyMs)
+    averageLatencyMs: Math.round(averageLatencyMs),
+    timeRange
   };
 };
 
-const getEndpointHealth = async (projectId) => {
+const getEndpointHealth = async (projectId, timeRange = '24h') => {
   const objectId = new mongoose.Types.ObjectId(projectId);
 
   // 1. Get endpoints for the project
   const endpoints = await WebhookEndpoint.find({ projectId: objectId }).select('_id endpointId destinationUrl');
-  if (endpoints.length === 0) return [];
+  if (endpoints.length === 0) return { timeRange, endpoints: [] };
 
   const endpointIds = endpoints.map(ep => ep._id);
   
   // Time window boundary
-  const since = new Date(Date.now() - HEALTH_WINDOW_HOURS * 60 * 60 * 1000);
+  let since = new Date();
+  if (timeRange === '7d') since.setDate(since.getDate() - 7);
+  else if (timeRange === '30d') since.setDate(since.getDate() - 30);
+  else {
+    since.setHours(since.getHours() - 24);
+    timeRange = '24h';
+  }
 
   // 2. Aggregate recent DeliveryAttempts by endpoint
   const attemptAgg = await DeliveryAttempt.aggregate([
@@ -171,6 +189,8 @@ const getEndpointHealth = async (projectId) => {
       lastDeliveryAt: stats.lastDeliveryAt
     };
   });
+  
+  return { timeRange, endpoints: results };
 };
 
 const getWorkspaceAnalytics = async (workspaceId, timeRange = '24h') => {

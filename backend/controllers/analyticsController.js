@@ -5,6 +5,7 @@ const analyticsService = require('../services/analyticsService');
 const getProjectAnalytics = async (req, res) => {
   try {
     const { projectId } = req.params;
+    const { timeRange } = req.query;
 
     // 1. Verify project exists
     const project = await Project.findById(projectId);
@@ -23,7 +24,7 @@ const getProjectAnalytics = async (req, res) => {
     }
 
     // 3. Fetch analytics
-    const analytics = await analyticsService.getProjectAnalytics(projectId);
+    const analytics = await analyticsService.getProjectAnalytics(projectId, timeRange);
 
     res.status(200).json(analytics);
   } catch (error) {
@@ -35,6 +36,7 @@ const getProjectAnalytics = async (req, res) => {
 const getEndpointHealth = async (req, res) => {
   try {
     const { projectId } = req.params;
+    const { timeRange } = req.query;
 
     // 1. Verify project exists
     const project = await Project.findById(projectId);
@@ -53,7 +55,7 @@ const getEndpointHealth = async (req, res) => {
     }
 
     // 3. Fetch endpoint health
-    const healthData = await analyticsService.getEndpointHealth(projectId);
+    const healthData = await analyticsService.getEndpointHealth(projectId, timeRange);
 
     res.status(200).json(healthData);
   } catch (error) {

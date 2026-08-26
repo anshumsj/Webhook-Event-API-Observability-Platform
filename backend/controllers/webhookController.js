@@ -301,13 +301,32 @@ const getEventById = async (req, res) => {
       .select('-__v')
       .lean();
 
-    // Redact attempts telemetry
-    const attempts = rawAttempts.map(attempt => ({
-      ...attempt,
-      destinationUrl: maskUrlCredentials(attempt.destinationUrl),
-      requestHeaders: redactHeaders(attempt.requestHeaders),
-      responseHeaders: redactHeaders(attempt.responseHeaders)
-    }));
+    // Redact attempts telemetry and bound response size
+    const attempts = rawAttempts.map(attempt => {
+      let responseBody = attempt.responseBody;
+      let responseBodyTruncated = false;
+      
+      if (typeof responseBody === 'string' && responseBody.length > 10000) {
+        responseBody = responseBody.substring(0, 10000);
+        responseBodyTruncated = true;
+      }
+
+      const dto = {
+        ...attempt,
+        destinationUrl: maskUrlCredentials(attempt.destinationUrl),
+        requestHeaders: redactHeaders(attempt.requestHeaders),
+        responseHeaders: redactHeaders(attempt.responseHeaders)
+      };
+      
+      if (responseBody !== undefined) {
+        dto.responseBody = responseBody;
+      }
+      if (responseBodyTruncated) {
+        dto.responseBodyTruncated = true;
+      }
+      
+      return dto;
+    });
 
     // 7. Build an explicit, clean DTO — never spread toObject() directly,
     //    as it can include Mongoose internals depending on schema config.

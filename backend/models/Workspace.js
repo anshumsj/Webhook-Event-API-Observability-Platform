@@ -11,11 +11,13 @@ const workspaceSchema = new mongoose.Schema({
   owner: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'Workspace owner is required']
+    required: [true, 'Workspace owner is required'],
+    index: true
   },
   members: [{
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    ref: 'User',
+    index: true
   }]
 }, {
   timestamps: true // Automatically adds createdAt and updatedAt fields

@@ -69,6 +69,7 @@ const deliveryAttemptSchema = new mongoose.Schema({
 
 // Enforce unique attempt numbers per webhook event
 deliveryAttemptSchema.index({ webhookEventId: 1, attemptNumber: 1 }, { unique: true });
+deliveryAttemptSchema.index({ endpointId: 1, startedAt: -1 });
 
 const DeliveryAttempt = mongoose.model('DeliveryAttempt', deliveryAttemptSchema);
 

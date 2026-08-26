@@ -37,7 +37,7 @@ const buildProcessor = (emitFn) => async (job) => {
   const { eventId, projectId, processingTimeMs: ingestMs, isManualReplay } = job.data;
   const workerStart = Date.now();
 
-  console.log(`[Worker] ▶ Job ${job.id} | eventId: ${eventId} | attempt: ${job.attemptsMade + 1}/${RETRY_ATTEMPTS}`);
+  // console.log(`[Worker] ▶ Job ${job.id} | eventId: ${eventId} | attempt: ${job.attemptsMade + 1}/${RETRY_ATTEMPTS}`);
 
   // ── Step 1: Mark as 'processing' (or just fetch if replay) ───────────────────
   let processingDoc;
@@ -47,7 +47,7 @@ const buildProcessor = (emitFn) => async (job) => {
       console.warn(`[Worker] ⚠  Event not found, skipping manual replay: ${eventId}`);
       return;
     }
-    console.log(`[Worker] ⚙  Manual Replay | eventId: ${eventId}`);
+    // console.log(`[Worker] ⚙  Manual Replay | eventId: ${eventId}`);
   } else {
     processingDoc = await WebhookEvent.findOneAndUpdate(
       { eventId },
@@ -58,7 +58,7 @@ const buildProcessor = (emitFn) => async (job) => {
       console.warn(`[Worker] ⚠  Event not found, skipping: ${eventId}`);
       return;
     }
-    console.log(`[Worker] ⚙  Processing | eventId: ${eventId}`);
+    // console.log(`[Worker] ⚙  Processing | eventId: ${eventId}`);
     if (typeof emitFn === 'function') {
       emitFn(`project:${projectId}`, 'webhook:event:updated', buildSocketPayload(processingDoc));
     }
@@ -230,7 +230,7 @@ const startWorker = (emitFn = null) => {
   });
 
   worker.on('completed', (job) => {
-    console.log(`[Worker] ✅ Job ${job.id} completed.`);
+    // console.log(`[Worker] ✅ Job ${job.id} completed.`);
   });
 
   // Fires on every failed attempt. Only update to 'retry_exhausted' when all retries exhausted.
