@@ -264,7 +264,7 @@ export default function EventDetails() {
                 <h3 className="font-semibold text-text">Delivery Attempts</h3>
               </div>
               <div className="p-6 relative">
-                <AttemptTimeline attempts={event.attempts} eventStatus={event.status} />
+                <AttemptTimeline attempts={event.attempts} eventStatus={event.status} eventPayload={event.payload} />
               </div>
             </div>
           )}
