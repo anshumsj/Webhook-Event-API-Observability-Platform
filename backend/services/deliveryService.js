@@ -68,7 +68,37 @@ const deliverWebhook = async (eventDoc, destinationUrl, endpointSecret, attemptN
     if (!response.ok) {
       // For Commit 30, we throw on all non-2xx to let BullMQ retry.
       // This preserves existing compatibility.
-      const errorText = await response.text().catch(() => '');
+      let errorText = '';
+      if (response.body) {
+        try {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let bytesRead = 0;
+          const MAX_BYTES = 1024 * 1024; // 1 MB
+          
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              errorText += decoder.decode();
+              break;
+            }
+            
+            bytesRead += value.length;
+            errorText += decoder.decode(value, { stream: true });
+            
+            if (bytesRead >= MAX_BYTES) {
+              await reader.cancel('Reached 1MB limit');
+              errorText += '\n... [Response truncated: exceeded 1MB limit]';
+              break;
+            }
+          }
+        } catch (streamErr) {
+          errorText += '\n... [Error reading response stream]';
+        }
+      } else {
+        errorText = await response.text().catch(() => '');
+      }
+
       const err = new Error(`Delivery failed with status: ${response.status} ${response.statusText}`);
       err.responseStatusCode = response.status;
       err.responseBody = errorText;

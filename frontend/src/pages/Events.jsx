@@ -105,6 +105,30 @@ export default function Events() {
     };
   }, [socket, selectedProjectId]);
 
+  // Keep a fresh reference to fetchEvents to use inside the socket reconnect listener
+  // without triggering continuous re-renders.
+  const fetchEventsRef = useRef(null);
+  useEffect(() => {
+    fetchEventsRef.current = fetchEvents;
+  });
+
+  // Reconnect Reconciliation
+  useEffect(() => {
+    if (!socket || !selectedProjectId) return;
+
+    const handleReconnect = () => {
+      console.log('[Events] Socket reconnected. Re-joining room and reconciling events...');
+      socket.emit('join_project', selectedProjectId);
+      if (fetchEventsRef.current) fetchEventsRef.current();
+    };
+
+    socket.io.on('reconnect', handleReconnect);
+    
+    return () => {
+      socket.io.off('reconnect', handleReconnect);
+    };
+  }, [socket, selectedProjectId]);
+
   // 4. Single stable webhook:event:created listener per project.
   //    Reads current page from paginationRef — always fresh, no stale closure.
   useEffect(() => {

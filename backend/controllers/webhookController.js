@@ -95,8 +95,16 @@ const ingestWebhook = async (req, res) => {
 
       console.log(`[${req.requestId}] Enqueued | eventId: ${event.eventId}`);
     } catch (queueError) {
-      // Queue failure is non-fatal — event is in MongoDB at 'received'.
       console.error(`[${req.requestId}] Failed to enqueue job:`, queueError.message);
+      
+      // Update MongoDB status to 'failed' so it isn't orphaned as 'received'
+      await WebhookEvent.findOneAndUpdate({ eventId: event.eventId }, { status: 'failed' });
+      
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error enqueuing webhook',
+        requestId: req.requestId,
+      });
     }
 
     // 6. Log summary

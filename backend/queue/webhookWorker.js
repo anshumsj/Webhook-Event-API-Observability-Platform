@@ -88,6 +88,9 @@ const buildProcessor = (emitFn) => async (job) => {
     const attemptStart = Date.now();
     
     let attemptDoc;
+    let skipDelivery = false;
+    let previousErrorToRethrow = null;
+
     try {
       attemptDoc = await DeliveryAttempt.create({
         webhookEventId: processingDoc._id,
@@ -100,45 +103,97 @@ const buildProcessor = (emitFn) => async (job) => {
         requestMethod: 'POST'
       });
     } catch (createErr) {
-      if (createErr.code === 11000 && isManualReplay) {
-        console.error(`[Worker] ❌ Race condition: attempt ${attemptNumber} already exists for manual replay ${eventId}`);
-        return;
+      if (createErr.code === 11000) {
+        if (isManualReplay) {
+          console.error(`[Worker] ❌ Race condition: attempt ${attemptNumber} already exists for manual replay ${eventId}`);
+          return;
+        }
+        
+        // Find existing attempt
+        const existingAttempt = await DeliveryAttempt.findOne({ webhookEventId: processingDoc._id, attemptNumber });
+        if (!existingAttempt) throw createErr;
+        
+        if (existingAttempt.status === 'pending') {
+          console.warn(`[Worker] ⚠ Recovering orphaned pending attempt ${attemptNumber} for eventId: ${eventId}`);
+          attemptDoc = existingAttempt;
+        } else {
+          console.warn(`[Worker] ⚠ Attempt ${attemptNumber} is already ${existingAttempt.status}. Protecting terminal state.`);
+          skipDelivery = true;
+          
+          if (existingAttempt.status === 'success') {
+            statusToSet = 'processed';
+          } else {
+            // Reconstruct the error to let BullMQ continue retrying
+            previousErrorToRethrow = new Error(`Recovered from crash: previous attempt was ${existingAttempt.status}`);
+            previousErrorToRethrow.responseStatusCode = existingAttempt.responseStatusCode;
+            previousErrorToRethrow.responseBody = existingAttempt.responseBody;
+            previousErrorToRethrow.requestHeaders = existingAttempt.requestHeaders;
+            previousErrorToRethrow.responseHeaders = existingAttempt.responseHeaders;
+          }
+        }
+      } else {
+        throw createErr;
       }
-      throw createErr;
     }
 
-    const { deliverWebhook } = require('../services/deliveryService');
-    try {
-      const result = await deliverWebhook(processingDoc, endpoint.destinationUrl, endpoint.secret, attemptNumber);
-      
-      // Success (2xx)
-      await DeliveryAttempt.findByIdAndUpdate(attemptDoc._id, {
-        status: 'success',
-        responseStatusCode: result.status,
-        latencyMs: Date.now() - attemptStart,
-        completedAt: new Date(),
-        requestHeaders: result.requestHeaders,
-        responseHeaders: result.responseHeaders
-      });
-      statusToSet = 'processed';
-    } catch (error) {
-      // Failure (non-2xx, network, timeout)
-      const isTimeout = error.message.includes('timed out');
-      await DeliveryAttempt.findByIdAndUpdate(attemptDoc._id, {
-        status: isTimeout ? 'timeout' : 'failed',
-        responseStatusCode: error.responseStatusCode,
-        responseBody: error.responseBody,
-        errorMessage: error.message,
-        latencyMs: Date.now() - attemptStart,
-        completedAt: new Date(),
-        requestHeaders: error.requestHeaders,
-        responseHeaders: error.responseHeaders
-      });
-      
-      // Rethrow so BullMQ retries (only if automatic)
-      if (!isManualReplay) {
-        throw error;
+    if (!skipDelivery) {
+      const { deliverWebhook } = require('../services/deliveryService');
+      try {
+        const result = await deliverWebhook(processingDoc, endpoint.destinationUrl, endpoint.secret, attemptNumber);
+        
+        // Success (2xx)
+        await DeliveryAttempt.findByIdAndUpdate(attemptDoc._id, {
+          status: 'success',
+          responseStatusCode: result.status,
+          latencyMs: Date.now() - attemptStart,
+          completedAt: new Date(),
+          requestHeaders: result.requestHeaders,
+          responseHeaders: result.responseHeaders
+        });
+        statusToSet = 'processed';
+      } catch (error) {
+        // Failure (non-2xx, network, timeout)
+        const isTimeout = error.message.includes('timed out');
+        await DeliveryAttempt.findByIdAndUpdate(attemptDoc._id, {
+          status: isTimeout ? 'timeout' : 'failed',
+          responseStatusCode: error.responseStatusCode,
+          responseBody: error.responseBody,
+          errorMessage: error.message,
+          latencyMs: Date.now() - attemptStart,
+          completedAt: new Date(),
+          requestHeaders: error.requestHeaders,
+          responseHeaders: error.responseHeaders
+        });
+        
+        // Rethrow so BullMQ retries (only if automatic)
+        if (!isManualReplay) {
+          if (attemptNumber < RETRY_ATTEMPTS) {
+            const retryDoc = await WebhookEvent.findByIdAndUpdate(
+              processingDoc._id,
+              { status: 'retrying' },
+              { new: true }
+            );
+            if (typeof emitFn === 'function' && retryDoc) {
+              emitFn(`project:${projectId}`, 'webhook:event:updated', buildSocketPayload(retryDoc));
+            }
+          }
+          throw error;
+        }
       }
+    } else if (previousErrorToRethrow) {
+      // We skipped delivery because it was a terminal failure, but we need to rethrow
+      // so BullMQ actually executes the next retry!
+      if (!isManualReplay && attemptNumber < RETRY_ATTEMPTS) {
+        const retryDoc = await WebhookEvent.findByIdAndUpdate(
+          processingDoc._id,
+          { status: 'retrying' },
+          { new: true }
+        );
+        if (typeof emitFn === 'function' && retryDoc) {
+          emitFn(`project:${projectId}`, 'webhook:event:updated', buildSocketPayload(retryDoc));
+        }
+      }
+      throw previousErrorToRethrow;
     }
   }
 

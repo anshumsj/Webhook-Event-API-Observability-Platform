@@ -17,6 +17,8 @@ export default function EventStatusBadge({ status, size = 'sm' }) {
         return <XCircle className={`${iconClass} text-rose-400`} />;
       case 'processing':
         return <Loader2 className={`${iconClass} text-violet-400 animate-spin`} />;
+      case 'retrying':
+        return <Loader2 className={`${iconClass} text-orange-400 animate-spin`} />;
       case 'queued':
         return <Clock className={`${iconClass} text-sky-400`} />;
       default: // received
@@ -33,6 +35,8 @@ export default function EventStatusBadge({ status, size = 'sm' }) {
         return 'bg-rose-400/10 text-rose-400 border-rose-400/20';
       case 'processing':
         return 'bg-violet-400/10 text-violet-400 border-violet-400/20';
+      case 'retrying':
+        return 'bg-orange-400/10 text-orange-400 border-orange-400/20';
       case 'queued':
         return 'bg-sky-400/10 text-sky-400 border-sky-400/20';
       default: // received
