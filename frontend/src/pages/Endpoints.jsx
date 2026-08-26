@@ -1,7 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import api from '../services/api';
-import { Webhook, Copy, Check, Eye, EyeOff, ShieldCheck, Link2 } from 'lucide-react';
+import { Webhook, Copy, Check, Eye, EyeOff, ShieldCheck, Link2, Activity, Clock, AlertCircle, ArrowRight } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { Link } from 'react-router-dom';
+
+const EndpointHealthBadge = ({ health }) => {
+  let color = 'bg-surface/50 text-muted border-border';
+  let label = 'No Data';
+
+  if (health === 'healthy') {
+    color = 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20';
+    label = 'Healthy';
+  } else if (health === 'degraded') {
+    color = 'bg-amber-400/10 text-amber-400 border-amber-400/20';
+    label = 'Degraded';
+  } else if (health === 'unhealthy') {
+    color = 'bg-rose-400/10 text-rose-400 border-rose-400/20';
+    label = 'Unhealthy';
+  }
+
+  return (
+    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${color}`}>
+      <span className="w-2 h-2 rounded-full bg-current"></span>
+      {label}
+    </div>
+  );
+};
 
 export default function Endpoints() {
   const { activeWorkspace } = useWorkspace();
@@ -58,8 +83,20 @@ export default function Endpoints() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get(`/endpoints/project/${selectedProjectId}`);
-      setEndpoints(res.data);
+      const [endpointsRes, analyticsRes] = await Promise.all([
+        api.get(`/endpoints/project/${selectedProjectId}`),
+        api.get(`/analytics/project/${selectedProjectId}/endpoints`).catch(() => ({ data: [] }))
+      ]);
+      
+      const endpointsData = endpointsRes.data;
+      const analyticsData = analyticsRes.data || [];
+      
+      const mergedEndpoints = endpointsData.map(ep => {
+        const health = analyticsData.find(a => String(a._id) === String(ep._id)) || null;
+        return { ...ep, healthData: health };
+      });
+      
+      setEndpoints(mergedEndpoints);
     } catch (err) {
       console.error('Error fetching endpoints:', err);
       setError('Failed to load endpoints.');
@@ -165,15 +202,66 @@ export default function Endpoints() {
             
             return (
               <div key={endpoint._id} className="bg-surface border border-border rounded-xl p-6 shadow-sm">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Webhook className="w-5 h-5 text-primary" />
+                <div className="flex items-start justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Webhook className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-medium text-text">Primary Endpoint</h3>
+                      <p className="text-sm text-muted">ID: {endpoint.endpointId}</p>
+                    </div>
                   </div>
                   <div>
-                    <h3 className="text-lg font-medium text-text">Primary Endpoint</h3>
-                    <p className="text-sm text-muted">ID: {endpoint.endpointId}</p>
+                    <EndpointHealthBadge health={endpoint.healthData?.health} />
                   </div>
                 </div>
+
+                {/* Metrics row */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-background border border-border rounded-lg p-3">
+                    <p className="text-xs text-muted font-medium mb-1 flex items-center gap-1.5"><Activity className="w-3.5 h-3.5"/> Success Rate</p>
+                    <p className="text-lg font-semibold text-text">
+                      {endpoint.healthData && endpoint.healthData.health !== 'no_data' 
+                        ? `${endpoint.healthData.successRate}%` 
+                        : '—'}
+                    </p>
+                  </div>
+                  <div className="bg-background border border-border rounded-lg p-3">
+                    <p className="text-xs text-muted font-medium mb-1 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> Avg Latency</p>
+                    <p className="text-lg font-semibold text-text">
+                      {endpoint.healthData && endpoint.healthData.health !== 'no_data' 
+                        ? `${endpoint.healthData.averageLatencyMs} ms` 
+                        : '—'}
+                    </p>
+                  </div>
+                  <div className="bg-background border border-border rounded-lg p-3">
+                    <p className="text-xs text-muted font-medium mb-1 flex items-center gap-1.5"><Activity className="w-3.5 h-3.5"/> Total Attempts</p>
+                    <p className="text-lg font-semibold text-text">
+                      {endpoint.healthData?.totalAttempts || 0}
+                    </p>
+                  </div>
+                  <div className="bg-background border border-border rounded-lg p-3">
+                    <p className="text-xs text-muted font-medium mb-1 flex items-center gap-1.5"><Webhook className="w-3.5 h-3.5"/> Last Delivery</p>
+                    <p className="text-lg font-semibold text-text">
+                      {endpoint.healthData?.lastDeliveryAt 
+                        ? formatDistanceToNow(new Date(endpoint.healthData.lastDeliveryAt), { addSuffix: true }) 
+                        : 'Never'}
+                    </p>
+                  </div>
+                </div>
+
+                {(endpoint.healthData?.health === 'degraded' || endpoint.healthData?.health === 'unhealthy') && (
+                  <div className="mb-6 bg-amber-400/10 border border-amber-400/20 text-amber-400 text-sm rounded-lg p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      <span>This endpoint is experiencing delivery issues.</span>
+                    </div>
+                    <Link to={`/events?project=${selectedProjectId}&endpoint=${endpoint._id}&status=failed`} className="flex items-center gap-1 hover:underline font-medium">
+                      Investigate failures <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                )}
 
                 <div className="space-y-6">
                   {/* Webhook URL Section */}
