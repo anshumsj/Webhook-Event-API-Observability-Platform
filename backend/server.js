@@ -16,6 +16,7 @@ const mongoose = require('mongoose');
 const requestIdMiddleware = require('./middleware/requestId');
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const port = process.env.PORT || 3001;
 
