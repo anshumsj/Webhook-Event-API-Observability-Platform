@@ -47,7 +47,33 @@ The platform uses an asynchronous, highly-scalable architecture:
 - MongoDB running locally or a remote MongoDB URI.
 - Redis server running locally or a remote Redis URI.
 
-### Setup Instructions
+## Docker / Production-like Local Setup
+
+To run HookSight in a fully containerized, production-like environment locally using Docker Compose:
+
+1. Ensure Docker and Docker Compose are installed.
+2. The environment variables are safely defaulted for local Compose execution.
+3. Build and start the containers in detached mode:
+   ```bash
+   docker compose build
+   docker compose up -d
+   ```
+4. Verify the containers are running and healthy:
+   ```bash
+   docker compose ps
+   ```
+5. View logs for any service (e.g., backend):
+   ```bash
+   docker compose logs -f backend
+   ```
+6. Access the frontend in your browser:
+   **http://localhost:8080**
+7. Stop the containers:
+   ```bash
+   docker compose down
+   ```
+
+## Development Setup Instructions
 1. Run `npm install` in the root directory. This will automatically install dependencies for both the frontend and backend workspaces.
 2. Create your `.env` files from the provided examples:
    - In the `backend/` directory, copy `.env.example` to `.env` and fill in your values (like `MONGODB_URI` and `JWT_SECRET`).

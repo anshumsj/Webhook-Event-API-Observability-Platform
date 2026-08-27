@@ -1,0 +1,102 @@
+◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+[Worker] Started — listening on queue "webhook-processing" | concurrency: 5
+Backend server listening on port 3001
+[Redis] Connecting to redis://127.0.0.1:6379...
+[Redis] Connected and ready.
+MongoDB connected successfully: 127.0.0.1
+[HTTP] POST /api/auth/register → 201 | 107ms
+[HTTP] POST /api/auth/login → 200 | 85ms
+[HTTP] POST /api/workspaces → 201 | 6ms
+[HTTP] POST /api/projects → 201 | 7ms
+[req_39591aea] Enqueued | eventId: d9f1a1df62bc5db1362aaadd
+[Ingest] req_39591aea | endpoint: 69cdd194f9b483559b3ae79f | event: d9f1a1df62bc5db1362aaadd | 4ms
+[HTTP] POST /api/webhooks/69cdd194f9b483559b3ae79f → 202 | 29ms
+[Worker] ❌ Failed (No Destination) | eventId: d9f1a1df62bc5db1362aaadd | 16ms
+[req_12166715] Enqueued | eventId: e1da5c38f8c88fc39cc487f8
+[Ingest] req_12166715 | endpoint: 69cdd194f9b483559b3ae79f | event: e1da5c38f8c88fc39cc487f8 | 6ms
+[HTTP] POST /api/webhooks/69cdd194f9b483559b3ae79f → 202 | 17ms
+[Worker] ❌ Failed (No Destination) | eventId: e1da5c38f8c88fc39cc487f8 | 12ms
+[req_772ca099] Enqueued | eventId: 8ac22f6f52aea6aaf8bcf27f
+[Ingest] req_772ca099 | endpoint: 69cdd194f9b483559b3ae79f | event: 8ac22f6f52aea6aaf8bcf27f | 6ms
+[HTTP] POST /api/webhooks/69cdd194f9b483559b3ae79f → 202 | 16ms
+[Worker] ❌ Failed (No Destination) | eventId: 8ac22f6f52aea6aaf8bcf27f | 16ms
+[HTTP] GET /api/events/project/6a9025adb600a58fc97a32af?page=1&limit=2 → 200 | 18ms
+[HTTP] POST /api/auth/register → 201 | 88ms
+[HTTP] POST /api/auth/login → 200 | 75ms
+[HTTP] GET /api/events/project/6a9025adb600a58fc97a32af → 403 | 3ms
+[Worker] ✓ Manual Replay Attempt Finished | eventId: 2de4083409b480dee444e208
+[HTTP] GET /api/endpoints/project/6a9025b664612569861c1096 → 200 | 6ms
+[HTTP] GET /api/endpoints/project/not-an-object-id → 400 | 0ms
+[HTTP] GET /api/endpoints/project/6a9025b664612569861c1096?projectId=not-an-object-id → 200 | 5ms
+[HTTP] POST /api/auth/login → 401 | 4ms
+[HTTP] POST /api/auth/login → 401 | 3ms
+[HTTP] POST /api/auth/login → 401 | 4ms
+[HTTP] POST /api/auth/login → 429 | 2ms
+[HTTP] POST /api/auth/login → 429 | 2ms
+[HTTP] POST /api/auth/login → 429 | 1ms
+[HTTP] POST /api/auth/login → 429 | 2ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 4ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 2ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 4ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 4ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 4ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 4ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 4ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 4ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 4ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 4ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 2ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 2ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 2ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 2ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 2ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 4ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 4ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 404 | 3ms
+[HTTP] POST /api/events/someEventId123/replay → 429 | 2ms
+[HTTP] POST /api/events/someEventId123/replay → 429 | 2ms
+[HTTP] POST /api/auth/register → 201 | 97ms
+[HTTP] POST /api/auth/register → 201 | 79ms
+[HTTP] POST /api/workspaces → 201 | 2ms
+[HTTP] POST /api/workspaces → 201 | 1ms
+[HTTP] POST /api/projects → 201 | 3ms
+[HTTP] POST /api/projects → 201 | 4ms
+[HTTP] POST /api/auth/login → 400 | 2ms
+[HTTP] POST /api/auth/api-keys → 201 | 84ms
+[HTTP] GET /api/projects/6a9025b7b600a58fc97a32b8 → 200 | 84ms
+[HTTP] GET /api/projects/6a9025b7b600a58fc97a32b9 → 403 | 78ms
+[HTTP] GET /api/auth/api-keys → 200 | 3ms
+[HTTP] DELETE /api/auth/api-keys/6a9025b7b600a58fc97a32be → 200 | 5ms
+[HTTP] GET /api/projects/6a9025b7b600a58fc97a32b8 → 401 | 2ms
