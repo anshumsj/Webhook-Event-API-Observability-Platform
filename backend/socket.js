@@ -8,7 +8,20 @@ let io;
 const initSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin: '*', // Will be tightened for production
+      origin: (origin, callback) => {
+        if (process.env.NODE_ENV !== 'production') {
+          if (!origin || /^http:\/\/localhost(:\d+)?$/.test(origin)) {
+            return callback(null, true);
+          }
+        }
+        if (process.env.ALLOWED_ORIGINS) {
+          const allowedOrigins = process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(o => o);
+          if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+          }
+        }
+        callback(new Error('Not allowed by CORS'));
+      },
       methods: ['GET', 'POST']
     }
   });

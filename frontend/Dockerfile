@@ -27,6 +27,9 @@ RUN npm run build
 # Stage 2: Runtime
 FROM nginx:alpine
 
+# Copy custom Nginx configuration for SPA routing
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+
 # Copy the generated Vite dist directory into Nginx's static web root
 COPY --from=builder /app/frontend/dist /usr/share/nginx/html
 
