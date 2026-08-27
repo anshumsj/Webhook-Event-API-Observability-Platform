@@ -9,10 +9,11 @@ const rateLimit = require('express-rate-limit');
 const replayLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 50,
-  keyGenerator: (req) => {
-    // Combine IP and user ID for the rate limit key
+  keyGenerator: (req, res) => {
+    // Combine IP and user ID for the rate limit key safely using ipKeyGenerator
+    const ip = rateLimit.ipKeyGenerator(req, res);
     const userId = req.user && req.user.id ? req.user.id : 'unknown';
-    return `${req.ip}-${userId}`;
+    return `${ip}-${userId}`;
   },
   message: { message: 'Too many replay attempts, please try again after 15 minutes' },
   standardHeaders: true,
