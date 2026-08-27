@@ -1,9 +1,11 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Search, Bell, User, LogOut } from 'lucide-react';
+import { useSocket } from '../../context/SocketContext';
+import { Search, Bell, User, LogOut, WifiOff } from 'lucide-react';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
+  const { isConnected } = useSocket();
   
   return (
     <header className="h-16 bg-surface/50 backdrop-blur-md border-b border-border flex items-center justify-between px-6 sticky top-0 z-10">
@@ -17,6 +19,13 @@ export default function Navbar() {
       </div>
 
       <div className="flex items-center gap-4">
+        {!isConnected && (
+          <div className="flex items-center gap-2 px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-400 rounded-full text-xs font-medium animate-pulse">
+            <WifiOff className="w-3.5 h-3.5" />
+            <span>Real-time connection lost — reconnecting...</span>
+          </div>
+        )}
+
         <button className="relative p-2 text-muted hover:text-text hover:bg-white/5 rounded-full transition-all">
           <Bell className="w-5 h-5" />
           <span className="absolute top-1.5 right-2 w-2 h-2 bg-primary rounded-full"></span>

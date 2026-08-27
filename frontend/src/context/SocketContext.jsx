@@ -9,6 +9,7 @@ export const useSocket = () => useContext(SocketContext);
 export const SocketProvider = ({ children }) => {
   const { user } = useAuth();
   const [socket, setSocket] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     // Only connect if user is authenticated
@@ -17,6 +18,7 @@ export const SocketProvider = ({ children }) => {
         socket.disconnect();
         setSocket(null);
       }
+      setIsConnected(false);
       return;
     }
 
@@ -35,14 +37,17 @@ export const SocketProvider = ({ children }) => {
 
     newSocket.on('connect', () => {
       console.log('[Socket.IO] Connected to server with ID:', newSocket.id);
+      setIsConnected(true);
     });
 
     newSocket.on('disconnect', (reason) => {
       console.log('[Socket.IO] Disconnected from server. Reason:', reason);
+      setIsConnected(false);
     });
 
     newSocket.on('connect_error', (err) => {
       console.error('[Socket.IO] Connection error:', err.message);
+      setIsConnected(false);
     });
 
     // Cleanup on unmount or when user logs out
@@ -52,7 +57,7 @@ export const SocketProvider = ({ children }) => {
   }, [user]); // Re-run if auth state changes
 
   return (
-    <SocketContext.Provider value={{ socket }}>
+    <SocketContext.Provider value={{ socket, isConnected }}>
       {children}
     </SocketContext.Provider>
   );

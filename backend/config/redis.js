@@ -57,4 +57,12 @@ const getRedis = () => {
   return client;
 };
 
-module.exports = { connectRedis, getRedis };
+const disconnectRedis = async () => {
+  if (client) {
+    console.log('[Redis] Disconnecting...');
+    await client.quit();
+    client = null;
+  }
+};
+
+module.exports = { connectRedis, getRedis, disconnectRedis };

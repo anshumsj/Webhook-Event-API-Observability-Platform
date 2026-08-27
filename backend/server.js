@@ -7,10 +7,12 @@ if (!process.env.JWT_SECRET) {
 
 const express = require('express');
 const http = require('http');
-const connectDB = require('./config/database');
-const { connectRedis } = require('./config/redis');
+const { connectDB, disconnectDB } = require('./config/database');
+const { connectRedis, getRedis, disconnectRedis } = require('./config/redis');
 const { initSocket } = require('./socket');
-const { startWorker } = require('./queue/webhookWorker');
+const { startWorker, shutdownWorker } = require('./queue/webhookWorker');
+const { getWebhookQueue } = require('./queue/webhookQueue');
+const mongoose = require('mongoose');
 const requestIdMiddleware = require('./middleware/requestId');
 
 const app = express();
@@ -22,6 +24,18 @@ connectDB();
 
 // Connect to Redis
 connectRedis();
+
+// Request logging middleware
+app.use((req, res, next) => {
+  if (req.path === '/api/health') return next(); // Skip noisy health checks
+  
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[HTTP] ${req.method} ${req.originalUrl} → ${res.statusCode} | ${duration}ms`);
+  });
+  next();
+});
 
 // Basic middleware
 const cors = require('cors');
@@ -73,10 +87,35 @@ app.use('/api/endpoints', require('./routes/endpointRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
 
 // Health check route
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'running'
-  });
+app.get('/api/health', async (req, res) => {
+  try {
+    const dbStatus = mongoose.connection.readyState === 1 ? 'ready' : 'unavailable';
+    const redisClient = getRedis();
+    const redisStatus = redisClient.status === 'ready' ? 'ready' : 'unavailable';
+    
+    let queueCounts = { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 };
+    try {
+      const queue = getWebhookQueue();
+      queueCounts = await queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused');
+    } catch (qErr) {
+      // queue may not be reachable if redis is down
+      console.warn('[Health] Failed to get queue counts:', qErr.message);
+    }
+
+    const overallStatus = (dbStatus === 'ready' && redisStatus === 'ready') ? 'healthy' : 'unhealthy';
+    const httpStatus = overallStatus === 'healthy' ? 200 : 503;
+
+    res.status(httpStatus).json({
+      status: overallStatus,
+      dependencies: {
+        mongodb: dbStatus,
+        redis: redisStatus,
+        queue: queueCounts
+      }
+    });
+  } catch (error) {
+    res.status(503).json({ status: 'unhealthy', error: 'Internal health check failure' });
+  }
 });
 
 // Initialize Socket.IO — must come before startWorker so getIO() is available
@@ -91,6 +130,54 @@ startWorker((room, event, payload) => {
   } catch (e) {
     console.error('[Server] Worker socket emit failed:', e.message);
   }
+});
+
+let isShuttingDown = false;
+
+const gracefulShutdown = async (signal, err = null) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  
+  if (err) {
+    console.error(`[Process] Fatal error: ${err.message}`);
+  }
+  
+  console.log(`\n[Process] Received ${signal || 'Fatal Error'}. Starting graceful shutdown...`);
+
+  // 1. Stop accepting new HTTP requests
+  server.close(async () => {
+    console.log('[Process] HTTP server closed.');
+    try {
+      // 2. Shut down BullMQ worker safely
+      await shutdownWorker();
+      
+      // 3. Close Redis
+      await disconnectRedis();
+      
+      // 4. Close MongoDB
+      await disconnectDB();
+      
+      console.log('[Process] Graceful shutdown complete.');
+      process.exit(err ? 1 : 0);
+    } catch (shutdownErr) {
+      console.error('[Process] Error during shutdown:', shutdownErr.message);
+      process.exit(1);
+    }
+  });
+
+  // Force kill if graceful shutdown hangs
+  setTimeout(() => {
+    console.error('[Process] Graceful shutdown timed out (10s). Forcing exit.');
+    process.exit(1);
+  }, 10000).unref();
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('uncaughtException', (err) => gracefulShutdown('uncaughtException', err));
+process.on('unhandledRejection', (reason, promise) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  gracefulShutdown('unhandledRejection', err);
 });
 
 server.listen(port, () => {
