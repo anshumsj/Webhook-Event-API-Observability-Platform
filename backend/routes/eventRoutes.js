@@ -3,7 +3,9 @@ const router = express.Router();
 const webhookController = require('../controllers/webhookController');
 const { protect } = require('../middleware/authMiddleware');
 const validateObjectId = require('../middleware/validateObjectId');
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
+const { RedisStore } = require('rate-limit-redis');
+const { getRedis } = require('../config/redis');
 
 // Replay limiter: 50 requests per 15 minutes per user + IP
 const replayLimiter = rateLimit({
@@ -11,13 +13,17 @@ const replayLimiter = rateLimit({
   max: 50,
   keyGenerator: (req, res) => {
     // Combine IP and user ID for the rate limit key safely using ipKeyGenerator
-    const ip = rateLimit.ipKeyGenerator(req, res);
+    const ip = ipKeyGenerator(req, res);
     const userId = req.user && req.user.id ? req.user.id : 'unknown';
     return `${ip}-${userId}`;
   },
-  message: { message: 'Too many replay attempts, please try again after 15 minutes' },
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many replay attempts, please try again after 15 minutes' } },
   standardHeaders: true,
   legacyHeaders: false,
+  store: new RedisStore({
+    sendCommand: (...args) => getRedis().call(...args),
+    prefix: 'rl:replay:'
+  }),
 });
 
 router.get('/project/:projectId', protect, validateObjectId('projectId'), webhookController.getEventsByProject);

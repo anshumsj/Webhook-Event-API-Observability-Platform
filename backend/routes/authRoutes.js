@@ -3,6 +3,8 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 const rateLimit = require('express-rate-limit');
+const { RedisStore } = require('rate-limit-redis');
+const { getRedis } = require('../config/redis');
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -10,6 +12,10 @@ const loginLimiter = rateLimit({
   message: { error: { code: 'RATE_LIMITED', message: 'Too many login attempts, please try again after 15 minutes' } },
   standardHeaders: true,
   legacyHeaders: false,
+  store: new RedisStore({
+    sendCommand: (...args) => getRedis().call(...args),
+    prefix: 'rl:login:'
+  }),
 });
 
 const registerLimiter = rateLimit({
@@ -18,6 +24,10 @@ const registerLimiter = rateLimit({
   message: { error: { code: 'RATE_LIMITED', message: 'Too many accounts created from this IP, please try again after an hour' } },
   standardHeaders: true,
   legacyHeaders: false,
+  store: new RedisStore({
+    sendCommand: (...args) => getRedis().call(...args),
+    prefix: 'rl:register:'
+  }),
 });
 
 // @route   POST /api/auth/register

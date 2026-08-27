@@ -1,4 +1,5 @@
 const ApiKey = require('../models/ApiKey');
+const Workspace = require('../models/Workspace');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 
@@ -6,12 +7,25 @@ const generateRandomString = (bytes = 32) => crypto.randomBytes(bytes).toString(
 
 const generateApiKey = async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, workspaceId } = req.body;
     if (!name) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'API Key name is required', requestId: req.requestId } });
     }
+    if (!workspaceId) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'workspaceId is required', requestId: req.requestId } });
+    }
 
     const userId = req.user.id;
+
+    // Validate workspace access
+    const workspace = await Workspace.findOne({
+      _id: workspaceId,
+      $or: [{ owner: userId }, { members: userId }]
+    });
+
+    if (!workspace) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to create API keys for this workspace', requestId: req.requestId } });
+    }
 
     // Generate raw key: hk_test_ + 32 chars
     const rawSecret = generateRandomString();
@@ -24,6 +38,7 @@ const generateApiKey = async (req, res) => {
 
     const apiKey = new ApiKey({
       userId,
+      workspaceId,
       name,
       keyPrefix,
       hash
@@ -76,7 +91,7 @@ const revokeApiKey = async (req, res) => {
     apiKey.revokedAt = new Date();
     await apiKey.save();
 
-    res.status(200).json({ error: { code: 'ERROR', message: 'API key revoked successfully', requestId: req ? req.requestId : 'unknown' } });
+    res.status(200).json({ success: true, message: 'API key revoked successfully' });
   } catch (error) {
     console.error('Error revoking API key:', error);
     res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error revoking API key', requestId: req ? req.requestId : 'unknown' } });

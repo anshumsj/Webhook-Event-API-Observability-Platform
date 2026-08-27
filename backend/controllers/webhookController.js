@@ -134,6 +134,10 @@ const getEventsByProject = async (req, res) => {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
+    if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== project.workspaceId.toString()) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
+    }
+
     // 2. Authorize via workspace
     const workspace = await Workspace.findOne({
       _id: project.workspaceId,
@@ -281,6 +285,10 @@ const getEventById = async (req, res) => {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project associated with event not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
+    if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== project.workspaceId.toString()) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
+    }
+
     // 3. Authorize via workspace
     const workspace = await Workspace.findOne({
       _id: project.workspaceId,
@@ -361,6 +369,10 @@ const getProjectEventTypes = async (req, res) => {
     const project = await Project.findById(projectId);
     if (!project) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project not found', requestId: req ? req.requestId : 'unknown' } });
 
+    if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== project.workspaceId.toString()) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
+    }
+
     const workspace = await Workspace.findOne({
       _id: project.workspaceId,
       $or: [{ owner: req.user.id }, { members: req.user.id }]
@@ -390,6 +402,10 @@ const replayEvent = async (req, res) => {
     const project = await Project.findById(event.projectId);
     if (!project) {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project associated with event not found', requestId: req ? req.requestId : 'unknown' } });
+    }
+
+    if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== project.workspaceId.toString()) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
     }
 
     const workspace = await Workspace.findOne({

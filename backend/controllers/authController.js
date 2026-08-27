@@ -9,6 +9,11 @@ const register = async (req, res) => {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Please provide name, email, and password', requestId: req ? req.requestId : 'unknown' } });
     }
 
+    // Validate input type (NoSQL Injection Defense)
+    if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid input format', requestId: req ? req.requestId : 'unknown' } });
+    }
+
     if (password.length < 6) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Password must be at least 6 characters long', requestId: req ? req.requestId : 'unknown' } });
     }
@@ -42,6 +47,11 @@ const login = async (req, res) => {
     // Validate input
     if (!email || !password) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Please provide email and password', requestId: req ? req.requestId : 'unknown' } });
+    }
+
+    // Validate input type (NoSQL Injection Defense)
+    if (typeof email !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid input format', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // Call service to login user

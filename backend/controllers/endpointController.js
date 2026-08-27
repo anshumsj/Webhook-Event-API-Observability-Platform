@@ -13,6 +13,10 @@ const getEndpointsByProject = async (req, res) => {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
+    if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== project.workspaceId.toString()) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
+    }
+
     // 2. Authorize via workspace
     const workspace = await Workspace.findOne({
       _id: project.workspaceId,
@@ -42,6 +46,10 @@ const createEndpoint = async (req, res) => {
     const project = await Project.findById(projectId);
     if (!project) {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project not found', requestId: req ? req.requestId : 'unknown' } });
+    }
+
+    if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== project.workspaceId.toString()) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 2. Authorize via workspace
@@ -87,6 +95,10 @@ const updateEndpoint = async (req, res) => {
     const project = await Project.findById(endpoint.projectId);
     if (!project) {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Associated project not found', requestId: req ? req.requestId : 'unknown' } });
+    }
+
+    if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== project.workspaceId.toString()) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 3. Authorize via workspace

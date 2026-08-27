@@ -2,6 +2,10 @@ const workspaceService = require('../services/workspaceService');
 
 const createWorkspace = async (req, res) => {
   try {
+    if (req.user.apiKeyWorkspaceId) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API keys cannot create workspaces', requestId: req ? req.requestId : 'unknown' } });
+    }
+
     const { name } = req.body;
     const userId = req.user.id;
 
@@ -26,7 +30,12 @@ const createWorkspace = async (req, res) => {
 const getWorkspaces = async (req, res) => {
   try {
     const userId = req.user.id;
-    const workspaces = await workspaceService.getWorkspacesByUserId(userId);
+    let workspaces = await workspaceService.getWorkspacesByUserId(userId);
+    
+    if (req.user.apiKeyWorkspaceId) {
+      workspaces = workspaces.filter(w => w._id.toString() === req.user.apiKeyWorkspaceId);
+    }
+
     res.status(200).json(workspaces);
   } catch (error) {
     console.error('Error getting workspaces:', error.message);

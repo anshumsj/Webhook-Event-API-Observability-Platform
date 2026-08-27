@@ -13,6 +13,10 @@ const getProjectAnalytics = async (req, res) => {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
+    if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== project.workspaceId.toString()) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
+    }
+
     // 2. Authorize via workspace
     const workspace = await Workspace.findOne({
       _id: project.workspaceId,
@@ -44,6 +48,10 @@ const getEndpointHealth = async (req, res) => {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Project not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
+    if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== project.workspaceId.toString()) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
+    }
+
     // 2. Authorize via workspace
     const workspace = await Workspace.findOne({
       _id: project.workspaceId,
@@ -68,6 +76,10 @@ const getWorkspaceAnalytics = async (req, res) => {
   try {
     const { workspaceId } = req.params;
     const { timeRange } = req.query;
+
+    if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== workspaceId.toString()) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
+    }
 
     // 1. Authorize via workspace
     const workspace = await Workspace.findOne({
@@ -94,6 +106,10 @@ const getWorkspaceEndpointHealth = async (req, res) => {
     const { workspaceId } = req.params;
     const { timeRange } = req.query;
 
+    if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== workspaceId.toString()) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
+    }
+
     // 1. Authorize via workspace
     const workspace = await Workspace.findOne({
       _id: workspaceId,
@@ -118,6 +134,10 @@ const getWorkspaceDeliveryTrends = async (req, res) => {
   try {
     const { workspaceId } = req.params;
     const { timeRange } = req.query;
+
+    if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== workspaceId.toString()) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
+    }
 
     // 1. Authorize via workspace
     const workspace = await Workspace.findOne({

@@ -10,6 +10,10 @@ const createProject = async (req, res) => {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Project name and workspace ID are required', requestId: req ? req.requestId : 'unknown' } });
     }
 
+    if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== workspaceId.toString()) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
+    }
+
     // Authorization check: Does the user belong to the workspace?
     const workspace = await Workspace.findOne({
       _id: workspaceId,
@@ -38,6 +42,10 @@ const getProjectsByWorkspace = async (req, res) => {
   try {
     const { workspaceId } = req.params;
     const userId = req.user.id;
+
+    if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== workspaceId.toString()) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
+    }
 
     // Authorization check: Does the user belong to the workspace?
     const workspace = await Workspace.findOne({

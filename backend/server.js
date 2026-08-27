@@ -38,7 +38,10 @@ app.use((req, res, next) => {
 });
 
 // Basic middleware
+const helmet = require('helmet');
 const cors = require('cors');
+
+app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
     // 1. In development, allow localhost (handles Vite dev ports)

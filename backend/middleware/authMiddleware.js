@@ -38,7 +38,10 @@ const protect = async (req, res, next) => {
         ApiKey.updateOne({ _id: validKey._id }, { lastUsedAt: new Date() }).catch(console.error);
 
         // Mock a user object so existing controllers work seamlessly
-        req.user = { id: validKey.userId };
+        req.user = { 
+          id: validKey.userId.toString(),
+          apiKeyWorkspaceId: validKey.workspaceId ? validKey.workspaceId.toString() : null
+        };
         return next();
       } catch (error) {
         console.error('API Key middleware error:', error);
