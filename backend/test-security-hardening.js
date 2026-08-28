@@ -13,6 +13,8 @@ let jwt1, jwt2;
 
 async function setup() {
   console.log('--- Setting up Security Hardening Tests ---');
+  process.env.MONGODB_URI = 'mongodb://localhost:27018/hooksightTest';
+  process.env.REDIS_URL = 'redis://localhost:6380';
   await mongoose.connect(process.env.MONGODB_URI);
   await connectRedis();
   

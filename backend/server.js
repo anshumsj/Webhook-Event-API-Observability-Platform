@@ -45,9 +45,14 @@ const cors = require('cors');
 app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
+    // 0. Allow requests with no origin (e.g., curl, server-to-server)
+    if (!origin) {
+      return callback(null, true);
+    }
+
     // 1. In development, allow localhost (handles Vite dev ports)
     if (process.env.NODE_ENV !== 'production') {
-      if (!origin || /^http:\/\/localhost(:\d+)?$/.test(origin)) {
+      if (/^http:\/\/localhost(:\d+)?$/.test(origin)) {
         return callback(null, true);
       }
     }

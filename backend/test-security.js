@@ -10,6 +10,8 @@ const API_BASE = 'http://localhost:3001/api';
 
 async function runTests() {
   console.log('--- Running Commit 54 Security Tests ---\n');
+  process.env.MONGODB_URI = 'mongodb://localhost:27018/hooksightTest';
+  process.env.REDIS_URL = 'redis://localhost:6380';
 
   // 1. Test JWT Fail-Closed
   console.log('[Test] JWT configuration fail-closed behavior');
