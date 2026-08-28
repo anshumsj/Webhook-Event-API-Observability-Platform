@@ -64,6 +64,18 @@ const createEndpoint = async (req, res) => {
 
     const { destinationUrl } = req.body;
 
+    if (destinationUrl) {
+      const { validateUrlSyntax, validateHostname } = require('../utils/ssrfValidator');
+      try {
+        validateUrlSyntax(destinationUrl);
+        const parsedUrl = new URL(destinationUrl);
+        validateHostname(parsedUrl.hostname);
+      } catch (err) {
+        console.error('SSRF Validation Error:', err.message, err.stack);
+        return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Destination URL must point to a publicly reachable HTTP(S) address.', requestId: req ? req.requestId : 'unknown' } });
+      }
+    }
+
     // 3. Generate new endpoint
     const endpoint = new WebhookEndpoint({
       projectId,
@@ -113,10 +125,14 @@ const updateEndpoint = async (req, res) => {
 
     // 4. Validate URL
     if (destinationUrl) {
+      const { validateUrlSyntax, validateHostname } = require('../utils/ssrfValidator');
       try {
-        new URL(destinationUrl);
+        validateUrlSyntax(destinationUrl);
+        const parsedUrl = new URL(destinationUrl);
+        validateHostname(parsedUrl.hostname);
       } catch (err) {
-        return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'The destination URL provided is not a valid URL format.', requestId: req ? req.requestId : 'unknown' } });
+        console.error('SSRF Validation Error:', err.message, err.stack);
+        return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Destination URL must point to a publicly reachable HTTP(S) address.', requestId: req ? req.requestId : 'unknown' } });
       }
     }
 

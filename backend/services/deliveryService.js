@@ -8,6 +8,13 @@
  * - Only forwards safe headers (Content-Type, User-Agent)
  * - Returns success or throws an error to allow BullMQ to handle retries
  */
+const axios = require('axios');
+const http = require('http');
+const https = require('https');
+const { createSafeAgent } = require('../utils/ssrfValidator');
+
+const safeHttpAgent = createSafeAgent(http.Agent);
+const safeHttpsAgent = createSafeAgent(https.Agent);
 
 const TIMEOUT_MS = 10000; // 10 seconds
 
@@ -21,9 +28,6 @@ const TIMEOUT_MS = 10000; // 10 seconds
  * @throws {Error} On network failure, timeout, or non-2xx status code.
  */
 const deliverWebhook = async (eventDoc, destinationUrl, endpointSecret, attemptNumber = 1, isManualReplay = false) => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
   // We only forward safe headers. Do not blindly copy all incoming headers.
   const safeHeaders = {
     'Content-Type': 'application/json',
@@ -51,54 +55,24 @@ const deliverWebhook = async (eventDoc, destinationUrl, endpointSecret, attemptN
   }
 
   try {
-    const response = await fetch(destinationUrl, {
+    const response = await axios({
       method: 'POST',
+      url: destinationUrl,
       headers: safeHeaders,
-      body: payloadString,
-      signal: controller.signal
+      data: payloadString,
+      timeout: TIMEOUT_MS,
+      maxRedirects: 0, // Disallow redirects
+      httpAgent: safeHttpAgent,
+      httpsAgent: safeHttpsAgent,
+      maxContentLength: 1024 * 1024, // 1 MB limit for response body
+      responseType: 'text', // Read as text
+      validateStatus: () => true // Do not throw on non-2xx status codes (we handle them below)
     });
 
-    const responseHeaders = {};
-    if (response.headers) {
-      for (const [key, val] of response.headers.entries()) {
-        responseHeaders[key] = val;
-      }
-    }
+    const responseHeaders = response.headers || {};
 
-    if (!response.ok) {
-      // For Commit 30, we throw on all non-2xx to let BullMQ retry.
-      // This preserves existing compatibility.
-      let errorText = '';
-      if (response.body) {
-        try {
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          let bytesRead = 0;
-          const MAX_BYTES = 1024 * 1024; // 1 MB
-          
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              errorText += decoder.decode();
-              break;
-            }
-            
-            bytesRead += value.length;
-            errorText += decoder.decode(value, { stream: true });
-            
-            if (bytesRead >= MAX_BYTES) {
-              await reader.cancel('Reached 1MB limit');
-              errorText += '\n... [Response truncated: exceeded 1MB limit]';
-              break;
-            }
-          }
-        } catch (streamErr) {
-          errorText += '\n... [Error reading response stream]';
-        }
-      } else {
-        errorText = await response.text().catch(() => '');
-      }
-
+    if (response.status < 200 || response.status >= 300) {
+      const errorText = response.data ? String(response.data) : '';
       const err = new Error(`Delivery failed with status: ${response.status} ${response.statusText}`);
       err.responseStatusCode = response.status;
       err.responseBody = errorText;
@@ -115,16 +89,29 @@ const deliverWebhook = async (eventDoc, destinationUrl, endpointSecret, attemptN
     };
 
   } catch (error) {
-    if (error.name === 'AbortError') {
-      const err = new Error(`Delivery timed out after ${TIMEOUT_MS}ms`);
-      err.requestHeaders = safeHeaders;
-      throw err;
+    // If it's a non-2xx error we manually threw above, just rethrow
+    if (error.responseStatusCode) {
+      throw error;
     }
-    // Re-throw network errors or non-2xx errors so the worker catches them
-    error.requestHeaders = safeHeaders;
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
+
+    let errMessage = error.message;
+    if (error.code === 'ECONNABORTED' || errMessage.includes('timeout')) {
+      errMessage = `Delivery timed out after ${TIMEOUT_MS}ms`;
+    } else if (errMessage.includes('maxContentLength size')) {
+      errMessage = 'Response exceeded 1MB limit';
+    }
+
+    const err = new Error(errMessage);
+    err.requestHeaders = safeHeaders;
+    
+    // Pass along response headers/body if axios captured them (e.g., redirect error)
+    if (error.response) {
+      err.responseStatusCode = error.response.status;
+      err.responseBody = error.response.data ? String(error.response.data) : '';
+      err.responseHeaders = error.response.headers || {};
+    }
+    
+    throw err;
   }
 };
 

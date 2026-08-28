@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import api from '../services/api';
-import { Webhook, Copy, Check, Eye, EyeOff, ShieldCheck, Link2, Activity, Clock, AlertCircle, ArrowRight } from 'lucide-react';
+import { Webhook, Copy, Check, Eye, EyeOff, ShieldCheck, Link2, Activity, Clock, AlertCircle, ArrowRight, Settings, Send, Plus, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { getErrorMessage } from '../utils/errorHandler';
@@ -40,6 +40,12 @@ export default function Endpoints() {
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
+
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingEndpoint, setEditingEndpoint] = useState(null);
+  const [destinationUrlInput, setDestinationUrlInput] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get base URL for webhooks
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
@@ -116,15 +122,39 @@ export default function Endpoints() {
     }
   };
 
-  const handleGenerateEndpoint = async () => {
+  const handleOpenCreateModal = () => {
+    setEditingEndpoint(null);
+    setDestinationUrlInput('');
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (endpoint) => {
+    setEditingEndpoint(endpoint);
+    setDestinationUrlInput(endpoint.destinationUrl || '');
+    setIsModalOpen(true);
+  };
+
+  const handleSaveEndpoint = async (e) => {
+    e.preventDefault();
     if (!selectedProjectId) return;
-    setLoading(true);
+    setIsSubmitting(true);
+    setError(null);
     try {
-      await api.post(`/endpoints/project/${selectedProjectId}`);
+      if (editingEndpoint) {
+        await api.patch(`/endpoints/${editingEndpoint.endpointId}`, {
+          destinationUrl: destinationUrlInput || null
+        });
+      } else {
+        await api.post(`/endpoints/project/${selectedProjectId}`, {
+          destinationUrl: destinationUrlInput || null
+        });
+      }
       await fetchEndpoints();
+      setIsModalOpen(false);
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to generate endpoint.'));
-      setLoading(false);
+      setError(getErrorMessage(err, 'Failed to save endpoint.'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -158,6 +188,15 @@ export default function Endpoints() {
               ))
             )}
           </select>
+          {projects.length > 0 && endpoints.length > 0 && (
+            <button
+              onClick={handleOpenCreateModal}
+              className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-surface font-semibold rounded-lg transition-colors text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              New Endpoint
+            </button>
+          )}
         </div>
       </div>
 
@@ -185,13 +224,13 @@ export default function Endpoints() {
             <Webhook className="w-6 h-6 text-muted" />
           </div>
           <h3 className="text-lg font-medium text-text mb-1">No endpoints found</h3>
-          <p className="text-muted mb-6 max-w-sm">This project doesn't have an endpoint yet. Generate one now to start receiving webhooks.</p>
+          <p className="text-muted mb-6 max-w-sm">This project doesn't have an endpoint yet. Create one now to start receiving webhooks.</p>
           <button
-            onClick={handleGenerateEndpoint}
+            onClick={handleOpenCreateModal}
             className="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 text-surface font-semibold rounded-xl transition-all shadow-lg shadow-primary/20 hover:shadow-primary/40 hover:-translate-y-0.5"
           >
             <Webhook className="w-5 h-5" />
-            Generate Endpoint
+            Create Endpoint
           </button>
         </div>
       ) : (
@@ -207,12 +246,19 @@ export default function Endpoints() {
                       <Webhook className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-medium text-text">Primary Endpoint</h3>
+                      <h3 className="text-lg font-medium text-text">Webhook Endpoint</h3>
                       <p className="text-sm text-muted">ID: {endpoint.endpointId}</p>
                     </div>
                   </div>
-                  <div>
+                  <div className="flex items-center gap-3">
                     <EndpointHealthBadge health={endpoint.healthData?.health} />
+                    <button
+                      onClick={() => handleOpenEditModal(endpoint)}
+                      className="p-2 text-muted hover:text-text hover:bg-white/5 rounded-lg transition-colors border border-transparent hover:border-border"
+                      title="Configure Endpoint"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
 
@@ -267,7 +313,7 @@ export default function Endpoints() {
                   <div>
                     <label className="flex items-center gap-2 text-sm font-medium text-text mb-2">
                       <Link2 className="w-4 h-4 text-muted" />
-                      Webhook URL
+                      Incoming Webhook URL
                     </label>
                     <p className="text-sm text-muted mb-3">
                       Send your POST requests to this URL. We accept any valid JSON payload.
@@ -283,6 +329,26 @@ export default function Endpoints() {
                         {copiedUrl ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                         {copiedUrl ? 'Copied' : 'Copy URL'}
                       </button>
+                    </div>
+                  </div>
+
+                  <div className="h-px bg-border w-full"></div>
+
+                  {/* Destination URL Section */}
+                  <div>
+                    <label className="flex items-center justify-between text-sm font-medium text-text mb-2">
+                      <span className="flex items-center gap-2">
+                        <Send className="w-4 h-4 text-muted" />
+                        Destination URL
+                      </span>
+                    </label>
+                    <p className="text-sm text-muted mb-3">
+                      Where we should forward incoming webhooks.
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <code className={`flex-1 block p-3 border rounded-lg text-sm font-mono overflow-x-auto ${endpoint.destinationUrl ? 'bg-background border-border text-text' : 'bg-surface border-dashed border-border/50 text-muted'}`}>
+                        {endpoint.destinationUrl || 'Not configured'}
+                      </code>
                     </div>
                   </div>
 
@@ -322,6 +388,61 @@ export default function Endpoints() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Create / Edit Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface border border-border rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-border">
+              <h3 className="text-xl font-semibold text-text">
+                {editingEndpoint ? 'Configure Endpoint' : 'Create Endpoint'}
+              </h3>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="text-muted hover:text-text transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSaveEndpoint} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-text mb-1">
+                  Destination URL <span className="text-muted font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="url"
+                  value={destinationUrlInput}
+                  onChange={(e) => setDestinationUrlInput(e.target.value)}
+                  placeholder="https://myapp.com/api/webhooks"
+                  className="w-full bg-background border border-border text-text text-sm rounded-lg focus:ring-primary focus:border-primary block p-2.5 transition-colors"
+                />
+                <p className="text-xs text-muted mt-2">
+                  Incoming payloads will be forwarded to this URL. Must be a public HTTP(S) address.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-text bg-surface hover:bg-background border border-border rounded-lg transition-colors"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 text-sm font-medium text-surface bg-primary hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Saving...' : editingEndpoint ? 'Save Changes' : 'Create Endpoint'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
