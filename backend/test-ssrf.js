@@ -94,8 +94,66 @@ const runTests = async () => {
   process.env.NODE_ENV = 'development';
   await assertBlocked('host.docker.internal in Development (fails at connection)', 'http://host.docker.internal', 'ECONNREFUSED'); 
 
-  // 6. Public Domain (we'll just test validation, we don't want to actually hit Google during automated tests if we can avoid it, but let's try a safe mock if possible. We can't mock public DNS easily. We'll use a public mock API).
-  // await assertAllowed('Public HTTPS URL', 'https://jsonplaceholder.typicode.com/posts/1');
+  // 6. safeLookup Explicit Tests (Array vs String handling)
+  const { safeLookup } = require('./utils/ssrfValidator');
+
+  const assertLookupBlocked = (name, mockAddress, expectedError) => {
+    return new Promise((resolve) => {
+      // We mock dns.lookup temporarily by stubbing the hostname resolution
+      // But since safeLookup calls dns.lookup, we just pass a hostname that resolves predictably,
+      // OR we just unit test the validation logic directly.
+      // Since safeLookup takes a callback, we can mock dns.lookup using a stub.
+      const dns = require('dns');
+      const originalLookup = dns.lookup;
+
+      dns.lookup = (host, opts, cb) => {
+        cb(null, mockAddress, 4);
+      };
+
+      safeLookup('example.com', {}, (err) => {
+        dns.lookup = originalLookup; // restore
+        if (err && err.message.includes(expectedError)) {
+          console.log(`✅ [PASSED] ${name}: Blocked successfully.`);
+          passed++;
+        } else if (err) {
+          console.error(`❌ [FAILED] ${name}: Blocked, but wrong error. Expected '${expectedError}', got: ${err.message}`);
+          failed++;
+        } else {
+          console.error(`❌ [FAILED] ${name}: Expected to be blocked, but it succeeded.`);
+          failed++;
+        }
+        resolve();
+      });
+    });
+  };
+
+  const assertLookupAllowed = (name, mockAddress) => {
+    return new Promise((resolve) => {
+      const dns = require('dns');
+      const originalLookup = dns.lookup;
+      dns.lookup = (host, opts, cb) => {
+        cb(null, mockAddress, 4);
+      };
+
+      safeLookup('example.com', {}, (err) => {
+        dns.lookup = originalLookup;
+        if (err) {
+          console.error(`❌ [FAILED] ${name}: Expected to be allowed, but failed with: ${err.message}`);
+          failed++;
+        } else {
+          console.log(`✅ [PASSED] ${name}: Allowed successfully.`);
+          passed++;
+        }
+        resolve();
+      });
+    });
+  };
+
+  await assertLookupAllowed('Lookup String Public IP', '8.8.8.8');
+  await assertLookupBlocked('Lookup String Private IP', '10.0.0.1', 'blocked or invalid IP address');
+  await assertLookupAllowed('Lookup Array Objects Public IP', [{ address: '8.8.8.8', family: 4 }]);
+  await assertLookupBlocked('Lookup Array Objects Private IP', [{ address: '192.168.1.1', family: 4 }], 'blocked or invalid IP address');
+  await assertLookupBlocked('Lookup Array Mixed IPs (one blocked)', [{ address: '8.8.8.8', family: 4 }, { address: '127.0.0.1', family: 4 }], 'blocked or invalid IP address');
 
   server.close();
 

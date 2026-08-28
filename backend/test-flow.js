@@ -11,7 +11,8 @@ async function runTest() {
   
   let email1, email2, workspaceId, projectId1;
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
+    const mongoUri = process.env.TEST_MONGODB_URI || 'mongodb://127.0.0.1:27018/webhookObservability';
+    await mongoose.connect(mongoUri);
 
     // ---- SETUP USER 1 & WORKSPACE & PROJECT ----
     email1 = `test1_${Date.now()}@test.com`;

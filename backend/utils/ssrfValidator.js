@@ -85,12 +85,25 @@ const safeLookup = (hostname, options, callback) => {
         return callback(null, address, family);
       }
 
-      // Check the resolved IP to prevent DNS Rebinding
-      validateIpAddress(address);
+      // Check the resolved IP(s) to prevent DNS Rebinding
+      let addressesToValidate = [];
+      if (Array.isArray(address)) {
+        // Node's dns.lookup returns an array of objects like { address: '...', family: 4 } when options.all is true
+        addressesToValidate = address.map(a => typeof a === 'object' ? a.address : a);
+      } else {
+        addressesToValidate = [address];
+      }
+
+      for (const addr of addressesToValidate) {
+        validateIpAddress(addr);
+      }
       
       callback(null, address, family);
     } catch (e) {
-      callback(new Error(`SSRF Prevention: Destination resolved to blocked IP ${address}`));
+      // Log the specific details internally for debugging, but don't leak them externally
+      console.error(`[SSRF Validator] Blocked DNS resolution for ${hostname}: ${e.message}`);
+      // Return a generic error to prevent exposing internal network topologies via the API/DB
+      callback(new Error('SSRF Prevention: Destination resolved to a blocked or invalid IP address.'));
     }
   });
 };
