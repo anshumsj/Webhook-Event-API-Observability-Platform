@@ -8,7 +8,7 @@ It is divided into a frontend (React/Vite) and backend (Node/Express/Worker).
 The platform uses an asynchronous, highly-scalable architecture:
 1. **API Server (Express)**: Ingests webhooks, validates them, saves them to MongoDB, and pushes a job to Redis. Returns `202 Accepted` immediately.
 2. **Queue (Redis + BullMQ)**: Buffers incoming webhook events to seamlessly handle massive traffic spikes.
-3. **Worker**: A separate process that consumes jobs from the queue, processes the webhooks, and updates MongoDB. Supports retries, exponential backoff, and concurrent processing.
+3. **Worker**: A separate process that consumes jobs from the queue, processes the webhooks, delivers them to configured destination URLs, and updates MongoDB. Supports retries, exponential backoff, and concurrent processing.
 4. **Real-time Engine (Socket.IO)**: Broadcasts lifecycle state changes (`received` → `queued` → `processing` → `processed`/`failed`) directly to the frontend.
 
 ## Features
@@ -16,17 +16,18 @@ The platform uses an asynchronous, highly-scalable architecture:
 ### Backend
 - **Express Server**: REST API setup with `dotenv` configuration.
 - **Database**: MongoDB connection using Mongoose.
-- **Asynchronous Queue**: Redis and BullMQ for reliable, scalable webhook processing.
-- **Standalone Worker**: Processes webhooks asynchronously.
+- **Asynchronous Queue**: Redis and BullMQ for reliable, scalable webhook processing and delivery.
+- **Standalone Worker**: Processes webhooks asynchronously and forwards payloads to user-configured destination URLs using Axios.
 - **Real-time WebSockets**: Socket.IO integration for live UI updates.
 - **User Authentication**:
   - `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`.
   - Custom JWT verification middleware.
 - **Workspaces & Projects**: Multi-tenant isolation.
-- **Webhook Ingestion Engine**:
-  - `WebhookEndpoint` model for securely generating endpoint IDs.
+- **Webhook Ingestion & Delivery Engine**:
+  - `WebhookEndpoint` model for securely generating endpoint IDs, signing secrets, and managing `destinationUrl` configuration.
   - `WebhookEvent` model with a full 5-state lifecycle (`received`, `queued`, `processing`, `processed`, `failed`).
   - `POST /api/webhooks/:endpointId`: Receiver API returning immediate `202 Accepted`.
+  - Robust **SSRF Protection (DNS Rebinding Defense)** for outbound delivery to prevent attacks on internal infrastructure.
 - **Events API (Project Scoped)**:
   - Securely fetch paginated events and individual event details with sensitive header redaction.
 - **Observability & Tracing**: Global `X-Request-ID` correlation middleware for distributed tracing across API, Queue, and Worker.
@@ -36,9 +37,11 @@ The platform uses an asynchronous, highly-scalable architecture:
 - **Authentication Flow**: JWT integration via `AuthContext` and Axios interceptors.
 - **Dashboard Layout**: Dynamic `Sidebar`, `Navbar`, and `WorkspaceContext` for multi-tenant switching.
 - **Projects & Webhooks UI**:
+  - **Endpoints Dashboard**: Create and configure endpoints with destination URLs to receive and forward webhook payloads.
   - **Events Dashboard**: Real-time paginated table displaying event ID, parsed Event Type, Status, Timestamp, and Processing Time.
-  - **Event Details View**: Deep dive into individual webhooks. Displays safe JSON payload formatting, redacted headers list, rich metadata, and a live visual processing lifecycle timeline.
+  - **Event Details View**: Deep dive into individual webhooks. Displays safe JSON payload formatting, redacted headers list, rich metadata, delivery attempts, and a live visual processing lifecycle timeline.
   - **Live Updates**: The UI responds in real-time to Socket.IO events, updating statuses, badges, and the lifecycle timeline instantly without page refreshes.
+  - **Centralized Error Handling & Empty States**: Clean, robust, and actionable user feedback across the entire application interface.
 
 ## Getting Started
 
