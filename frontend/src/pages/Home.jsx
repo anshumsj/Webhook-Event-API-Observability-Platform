@@ -4,6 +4,7 @@ import { Activity, Webhook, FolderKanban, CheckCircle2, XCircle, Clock, AlertTri
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import TrendChart from '../components/TrendChart';
+import { getErrorMessage } from '../utils/errorHandler';
 
 const Home = () => {
   const { activeWorkspace, createWorkspace } = useWorkspace();
@@ -16,7 +17,7 @@ const Home = () => {
     try {
       await createWorkspace(newWorkspaceName);
     } catch (err) {
-      setError('Failed to create workspace');
+      setError(getErrorMessage(err, 'Failed to create workspace'));
     }
   };
 
@@ -42,7 +43,7 @@ const Home = () => {
         setEndpointHealth(healthRes.data);
         setTrends(trendsRes.data);
       } catch (err) {
-        setFetchError('Failed to load analytics.');
+        setFetchError(getErrorMessage(err, 'Failed to load analytics.'));
       } finally {
         setLoading(false);
       }

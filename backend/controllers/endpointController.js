@@ -33,7 +33,7 @@ const getEndpointsByProject = async (req, res) => {
     res.status(200).json(endpoints);
   } catch (error) {
     console.error('Error getting endpoints:', error.message);
-    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error retrieving endpoints', requestId: req ? req.requestId : 'unknown' } });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'We couldn\'t load your endpoints at this time. Please try again.', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -75,7 +75,7 @@ const createEndpoint = async (req, res) => {
     res.status(201).json(endpoint);
   } catch (error) {
     console.error('Error creating endpoint:', error.message);
-    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error creating endpoint', requestId: req ? req.requestId : 'unknown' } });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'We couldn\'t create your endpoint at this time. Please try again.', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -116,7 +116,7 @@ const updateEndpoint = async (req, res) => {
       try {
         new URL(destinationUrl);
       } catch (err) {
-        return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid destination URL format', requestId: req ? req.requestId : 'unknown' } });
+        return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'The destination URL provided is not a valid URL format.', requestId: req ? req.requestId : 'unknown' } });
       }
     }
 
@@ -127,7 +127,7 @@ const updateEndpoint = async (req, res) => {
     res.status(200).json(endpoint);
   } catch (error) {
     console.error('Error updating endpoint:', error.message);
-    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error updating endpoint', requestId: req ? req.requestId : 'unknown' } });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'We couldn\'t update your endpoint at this time. Please try again.', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 

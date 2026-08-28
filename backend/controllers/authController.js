@@ -5,13 +5,18 @@ const register = async (req, res) => {
     const { name, email, password } = req.body;
 
     // Validate input
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Please provide name, email, and password', requestId: req ? req.requestId : 'unknown' } });
+    if (!name) return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Please enter your name.', requestId: req ? req.requestId : 'unknown' } });
+    if (!email) return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Please enter your email address.', requestId: req ? req.requestId : 'unknown' } });
+    if (!password) return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Please enter your password.', requestId: req ? req.requestId : 'unknown' } });
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Please enter a valid email address.', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // Validate input type (NoSQL Injection Defense)
     if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string') {
-      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid input format', requestId: req ? req.requestId : 'unknown' } });
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Please ensure your name, email, and password are correct.', requestId: req ? req.requestId : 'unknown' } });
     }
 
     if (password.length < 6) {
@@ -30,13 +35,13 @@ const register = async (req, res) => {
         email: user.email
       }
     });
-  } catch (error) {
+    } catch (error) {
     if (error.message === 'User already exists') {
-      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: error.message, requestId: req ? req.requestId : 'unknown' } });
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'An account with this email already exists.', requestId: req ? req.requestId : 'unknown' } });
     }
     
     console.error('Registration error:', error.message);
-    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server Error', requestId: req ? req.requestId : 'unknown' } });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'We couldn\'t process your registration request at this time. Please try again.', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -45,13 +50,12 @@ const login = async (req, res) => {
     const { email, password } = req.body;
 
     // Validate input
-    if (!email || !password) {
-      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Please provide email and password', requestId: req ? req.requestId : 'unknown' } });
-    }
+    if (!email) return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Please enter your email address.', requestId: req ? req.requestId : 'unknown' } });
+    if (!password) return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Please enter your password.', requestId: req ? req.requestId : 'unknown' } });
 
     // Validate input type (NoSQL Injection Defense)
     if (typeof email !== 'string' || typeof password !== 'string') {
-      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid input format', requestId: req ? req.requestId : 'unknown' } });
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Please ensure your email and password are correct.', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // Call service to login user
@@ -68,11 +72,11 @@ const login = async (req, res) => {
     });
   } catch (error) {
     if (error.message === 'Invalid credentials') {
-      return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: error.message, requestId: req ? req.requestId : 'unknown' } });
+      return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid email or password.', requestId: req ? req.requestId : 'unknown' } });
     }
     
     console.error('Login error:', error.message);
-    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server Error', requestId: req ? req.requestId : 'unknown' } });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'We couldn\'t process your login request at this time. Please try again.', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -91,7 +95,7 @@ const getMe = async (req, res) => {
     });
   } catch (error) {
     console.error('Get me error:', error.message);
-    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server Error', requestId: req ? req.requestId : 'unknown' } });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'We couldn\'t fetch your profile at this time. Please try again.', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 

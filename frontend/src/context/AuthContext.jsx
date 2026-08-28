@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api';
+import { getErrorMessage } from '../utils/errorHandler';
 
 const AuthContext = createContext();
 
@@ -38,7 +39,6 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     const res = await api.post('/auth/login', { email, password });
     localStorage.setItem('token', res.data.token);
-    // Refresh user profile after login
     const meRes = await api.get('/auth/me');
     setUser(meRes.data.user);
     return res.data;
@@ -47,7 +47,6 @@ export const AuthProvider = ({ children }) => {
   const register = async (name, email, password) => {
     const res = await api.post('/auth/register', { name, email, password });
     localStorage.setItem('token', res.data.token);
-    // Refresh user profile after register
     const meRes = await api.get('/auth/me');
     setUser(meRes.data.user);
     return res.data;

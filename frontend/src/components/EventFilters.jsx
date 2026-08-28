@@ -40,11 +40,21 @@ export default function EventFilters({
         className="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary text-text max-w-[200px]"
       >
         <option value="">All Endpoints</option>
-        {endpoints.map(ep => (
-          <option key={ep._id} value={ep._id}>
-            {new URL(ep.destinationUrl).hostname}
-          </option>
-        ))}
+        {endpoints && endpoints.map(ep => {
+          let hostname = 'Unknown Domain';
+          if (ep.destinationUrl) {
+            try {
+              hostname = new URL(ep.destinationUrl).hostname;
+            } catch (err) {
+              hostname = 'Invalid URL';
+            }
+          }
+          return (
+            <option key={ep._id} value={ep._id}>
+              {hostname}
+            </option>
+          );
+        })}
       </select>
 
       <select

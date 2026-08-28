@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getErrorMessage } from '../utils/errorHandler';
 import { Webhook } from 'lucide-react';
 
 export default function Login() {
@@ -23,7 +24,7 @@ export default function Login() {
       }
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.message || `${isRegistering ? 'Registration' : 'Login'} failed. Please try again.`);
+      setError(getErrorMessage(err, `${isRegistering ? 'Registration' : 'Login'} failed. Please try again.`));
     }
   };
 

@@ -8,6 +8,7 @@ import { RotateCcw } from 'lucide-react';
 import AttemptTimeline from '../components/AttemptTimeline';
 import LifecycleTimeline from '../components/LifecycleTimeline';
 import EventStatusBadge from '../components/EventStatusBadge';
+import { getErrorMessage } from '../utils/errorHandler';
 
 export default function EventDetails() {
   const { eventId } = useParams();
@@ -26,8 +27,7 @@ export default function EventDetails() {
       const res = await api.get(`/events/${eventId}`);
       setEvent(res.data);
     } catch (err) {
-      console.error('Error fetching event details:', err);
-      setError('Failed to load event details or you do not have permission.');
+      setError(getErrorMessage(err, 'Failed to load event details or you do not have permission.'));
     } finally {
       setLoading(false);
     }

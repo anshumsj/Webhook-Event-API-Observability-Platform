@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 import EventFilters from '../components/EventFilters';
 import Pagination from '../components/Pagination';
 import EventStatusBadge from '../components/EventStatusBadge';
+import { getErrorMessage } from '../utils/errorHandler';
 
 export default function Events() {
   const { activeWorkspace } = useWorkspace();
@@ -41,6 +42,8 @@ export default function Events() {
   const [searchInput, setSearchInput] = useState(urlSearch);
   const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
   const [sortOrder, setSortOrder] = useState(urlOrder);
+
+  const hasActiveFilters = Boolean(statusFilter || endpointFilter || eventTypeFilter || timeRangeFilter !== 'All' || debouncedSearch || sortOrder !== 'desc');
 
   // Dropdown options
   const [endpoints, setEndpoints] = useState([]);
@@ -261,8 +264,7 @@ export default function Events() {
         setNewEventsCount(0);
       }
     } catch (err) {
-      console.error('Error fetching events:', err);
-      setError('Failed to load events. Please try again later.');
+      setError(getErrorMessage(err, 'Failed to load events. Please try again later.'));
     } finally {
       setLoading(false);
     }
@@ -436,13 +438,26 @@ export default function Events() {
           ))}
         </div>
       ) : events.length === 0 ? (
-        <div className="border-2 border-dashed border-border rounded-xl p-12 flex flex-col items-center justify-center text-center mt-6">
-          <div className="w-12 h-12 bg-surface rounded-full flex items-center justify-center mb-4">
-            <Filter className="w-6 h-6 text-muted" />
+        hasActiveFilters ? (
+          <div className="border-2 border-dashed border-border rounded-xl p-12 flex flex-col items-center justify-center text-center mt-6">
+            <div className="w-12 h-12 bg-surface rounded-full flex items-center justify-center mb-4">
+              <Filter className="w-6 h-6 text-muted" />
+            </div>
+            <h3 className="text-lg font-medium text-text mb-1">No deliveries match your current filters.</h3>
+            <p className="text-muted mb-4 max-w-sm">Try adjusting or clearing your filters to see more events.</p>
           </div>
-          <h3 className="text-lg font-medium text-text mb-1">No deliveries match your current filters.</h3>
-          <p className="text-muted mb-4 max-w-sm">Try adjusting or clearing your filters to see more events.</p>
-        </div>
+        ) : (
+          <div className="border-2 border-dashed border-border rounded-xl p-12 flex flex-col items-center justify-center text-center mt-6">
+            <div className="w-12 h-12 bg-surface rounded-full flex items-center justify-center mb-4">
+              <Activity className="w-6 h-6 text-muted" />
+            </div>
+            <h3 className="text-lg font-medium text-text mb-1">No events yet</h3>
+            <p className="text-muted mb-4 max-w-sm">Create an endpoint and send your first webhook.</p>
+            <Link to="/endpoints" className="mt-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors">
+              Create an endpoint
+            </Link>
+          </div>
+        )
       ) : (
         <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm flex flex-col">
           <div className="overflow-x-auto">

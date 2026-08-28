@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import api from '../services/api';
 import { FolderKanban, Plus, MoreVertical, X } from 'lucide-react';
+import { getErrorMessage } from '../utils/errorHandler';
 
 export default function Projects() {
   const { activeWorkspace } = useWorkspace();
@@ -28,8 +29,7 @@ export default function Projects() {
       const res = await api.get(`/projects/${activeWorkspace._id}`);
       setProjects(res.data);
     } catch (err) {
-      console.error('Error fetching projects:', err);
-      setError('Failed to load projects. Please try again later.');
+      setError(getErrorMessage(err, 'Failed to load projects'));
     } finally {
       setLoading(false);
     }
@@ -49,8 +49,7 @@ export default function Projects() {
       setShowCreateModal(false);
       fetchProjects(); // Refresh the list
     } catch (err) {
-      console.error('Error creating project:', err);
-      setError('Failed to create project');
+      setError(getErrorMessage(err, 'Failed to create project'));
     } finally {
       setCreatingProject(false);
     }
@@ -65,7 +64,7 @@ export default function Projects() {
     try {
       await createWorkspace(newWorkspaceName);
     } catch (err) {
-      setError('Failed to create workspace');
+      setError(getErrorMessage(err, 'Failed to create workspace'));
     }
   };
 

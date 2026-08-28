@@ -97,7 +97,7 @@ const ingestWebhook = async (req, res) => {
       // Update MongoDB status to 'failed' so it isn't orphaned as 'received'
       await WebhookEvent.findOneAndUpdate({ eventId: event.eventId }, { status: 'failed' });
       
-      return res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Internal server error enqueuing webhook', requestId: req ? req.requestId : 'unknown' } });
+      return res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'We couldn\'t process your webhook at this time. Please try again.', requestId: req ? req.requestId : 'unknown' } });
     }
 
     // 6. Log summary
@@ -114,7 +114,7 @@ const ingestWebhook = async (req, res) => {
   } catch (error) {
     // Log only the error message, never the full error object to prevent leaking secrets/payloads
     console.error(`[${req.requestId}] Error ingesting webhook:`, error.message || 'Unknown error');
-    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Internal server error processing webhook', requestId: req ? req.requestId : 'unknown' } });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'We couldn\'t process your webhook at this time. Please try again.', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -229,7 +229,7 @@ const getEventsByProject = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching events:', error);
-    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error retrieving events', requestId: req ? req.requestId : 'unknown' } });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'We couldn\'t retrieve your events at this time. Please try again.', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -358,7 +358,7 @@ const getEventById = async (req, res) => {
     res.status(200).json(dto);
   } catch (error) {
     console.error('Error fetching event by ID:', error);
-    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error retrieving event', requestId: req ? req.requestId : 'unknown' } });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'We couldn\'t load your event details at this time. Please try again.', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -384,7 +384,7 @@ const getProjectEventTypes = async (req, res) => {
     res.status(200).json(types);
   } catch (error) {
     console.error('Error fetching event types:', error);
-    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error', requestId: req ? req.requestId : 'unknown' } });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'We couldn\'t load your event types at this time. Please try again.', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 
@@ -447,7 +447,7 @@ const replayEvent = async (req, res) => {
     });
   } catch (error) {
     console.error('Error replaying event:', error);
-    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error queueing replay', requestId: req ? req.requestId : 'unknown' } });
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'We couldn\'t queue your replay at this time. Please try again.', requestId: req ? req.requestId : 'unknown' } });
   }
 };
 

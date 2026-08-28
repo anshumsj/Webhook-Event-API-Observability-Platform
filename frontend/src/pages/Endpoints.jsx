@@ -4,6 +4,7 @@ import api from '../services/api';
 import { Webhook, Copy, Check, Eye, EyeOff, ShieldCheck, Link2, Activity, Clock, AlertCircle, ArrowRight } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Link } from 'react-router-dom';
+import { getErrorMessage } from '../utils/errorHandler';
 
 const EndpointHealthBadge = ({ health }) => {
   let color = 'bg-surface/50 text-muted border-border';
@@ -98,8 +99,7 @@ export default function Endpoints() {
       
       setEndpoints(mergedEndpoints);
     } catch (err) {
-      console.error('Error fetching endpoints:', err);
-      setError('Failed to load endpoints.');
+      setError(getErrorMessage(err, 'Failed to load endpoints.'));
     } finally {
       setLoading(false);
     }
@@ -123,8 +123,7 @@ export default function Endpoints() {
       await api.post(`/endpoints/project/${selectedProjectId}`);
       await fetchEndpoints();
     } catch (err) {
-      console.error('Error generating endpoint:', err);
-      setError('Failed to generate endpoint.');
+      setError(getErrorMessage(err, 'Failed to generate endpoint.'));
       setLoading(false);
     }
   };
