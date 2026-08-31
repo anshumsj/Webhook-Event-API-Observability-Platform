@@ -297,15 +297,22 @@ export default function Endpoints() {
                 </div>
 
                 {(endpoint.healthData?.health === 'degraded' || endpoint.healthData?.health === 'unhealthy') && (
-                  <div className="mb-6 bg-amber-400/10 border border-amber-400/20 text-amber-400 text-sm rounded-lg p-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4" />
-                      <span>This endpoint is experiencing delivery issues.</span>
+                  endpoint.healthData.successRate === 100 ? (
+                    <div className="mb-6 bg-amber-400/10 border border-amber-400/20 text-amber-400 text-sm rounded-lg p-3 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>High response latency detected ({endpoint.healthData.averageLatencyMs}ms avg). All deliveries are succeeding.</span>
                     </div>
-                    <Link to={`/events?project=${selectedProjectId}&endpoint=${endpoint._id}&status=failed`} className="flex items-center gap-1 hover:underline font-medium">
-                      Investigate failures <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                  </div>
+                  ) : (
+                    <div className="mb-6 bg-amber-400/10 border border-amber-400/20 text-amber-400 text-sm rounded-lg p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>This endpoint is experiencing delivery failures.</span>
+                      </div>
+                      <Link to={`/events?project=${selectedProjectId}&endpoint=${endpoint.endpointId}&status=failed`} className="flex items-center gap-1 hover:underline font-medium">
+                        Investigate failures <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
+                  )
                 )}
 
                 <div className="space-y-6">

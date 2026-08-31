@@ -50,7 +50,7 @@ export default function EventFilters({
             }
           }
           return (
-            <option key={ep._id} value={ep._id}>
+            <option key={ep._id} value={ep.endpointId}>
               {hostname}
             </option>
           );
