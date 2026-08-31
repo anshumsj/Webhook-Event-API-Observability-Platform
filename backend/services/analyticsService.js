@@ -140,19 +140,40 @@ const getEndpointHealth = async (projectId, timeRange = '24h') => {
     }
   ]);
 
+  // 2.5 Aggregate WebhookEvents by endpoint for delivery-based success rate
+  const eventAgg = await WebhookEvent.aggregate([
+    { $match: { endpointId: { $in: endpointIds }, receivedAt: { $gte: since } } },
+    {
+      $group: {
+        _id: "$endpointId",
+        totalDeliveries: { $sum: 1 },
+        successfulDeliveries: { $sum: { $cond: [{ $eq: ["$status", "processed"] }, 1, 0] } },
+        failedDeliveries: { $sum: { $cond: [{ $eq: ["$status", "failed"] }, 1, 0] } },
+        deadLettered: { $sum: { $cond: [{ $eq: ["$status", "retry_exhausted"] }, 1, 0] } }
+      }
+    }
+  ]);
+
   // Map agg results by _id
   const aggMap = {};
   for (const stat of attemptAgg) {
     aggMap[String(stat._id)] = stat;
   }
+  
+  const eventMap = {};
+  for (const stat of eventAgg) {
+    eventMap[String(stat._id)] = stat;
+  }
 
   // 3. Format the final array
   return endpoints.map(ep => {
-    const stats = aggMap[String(ep._id)];
+    const epIdStr = String(ep._id);
+    const stats = aggMap[epIdStr];
+    const eventStats = eventMap[epIdStr];
     
-    if (!stats || stats.totalAttempts === 0) {
+    if ((!stats || stats.totalAttempts === 0) && (!eventStats || eventStats.totalDeliveries === 0)) {
       return {
-        _id: String(ep._id),
+        _id: epIdStr,
         endpointId: ep.endpointId,
         destinationUrl: ep.destinationUrl,
         health: 'no_data',
@@ -168,25 +189,35 @@ const getEndpointHealth = async (projectId, timeRange = '24h') => {
       };
     }
 
-    const completedAttempts = stats.successfulAttempts + stats.failedAttempts;
-    const successRate = completedAttempts > 0 ? (stats.successfulAttempts / completedAttempts) * 100 : 0;
-    const avgLatency = stats.latencyCount > 0 ? (stats.latencySum / stats.latencyCount) : 0;
-    const health = classifyEndpointHealth(successRate, avgLatency, completedAttempts);
+    const safeStats = stats || { totalAttempts: 0, successfulAttempts: 0, failedAttempts: 0, pendingAttempts: 0, latencySum: 0, latencyCount: 0, retryCount: 0, lastDeliveryAt: null };
+    const safeEventStats = eventStats || { totalDeliveries: 0, successfulDeliveries: 0, failedDeliveries: 0, deadLettered: 0 };
+
+    const completedAttempts = safeStats.successfulAttempts + safeStats.failedAttempts;
+    
+    // DELIVERY-BASED SUCCESS RATE calculation
+    const successRate = safeEventStats.totalDeliveries > 0 
+      ? (safeEventStats.successfulDeliveries / safeEventStats.totalDeliveries) * 100 
+      : 0;
+      
+    const avgLatency = safeStats.latencyCount > 0 ? (safeStats.latencySum / safeStats.latencyCount) : 0;
+    
+    // Health is now primarily based on delivery success rate
+    const health = classifyEndpointHealth(successRate, avgLatency, safeEventStats.totalDeliveries);
 
     return {
-      _id: String(ep._id),
+      _id: epIdStr,
       endpointId: ep.endpointId,
       destinationUrl: ep.destinationUrl,
       health,
-      totalAttempts: stats.totalAttempts,
-      successfulAttempts: stats.successfulAttempts,
-      failedAttempts: stats.failedAttempts,
-      pendingAttempts: stats.pendingAttempts,
+      totalAttempts: safeStats.totalAttempts,
+      successfulAttempts: safeStats.successfulAttempts,
+      failedAttempts: safeStats.failedAttempts,
+      pendingAttempts: safeStats.pendingAttempts,
       completedAttempts,
       successRate: Math.round(successRate * 100) / 100,
       averageLatencyMs: Math.round(avgLatency),
-      retryCount: stats.retryCount,
-      lastDeliveryAt: stats.lastDeliveryAt
+      retryCount: safeStats.retryCount,
+      lastDeliveryAt: safeStats.lastDeliveryAt
     };
   });
   
@@ -332,17 +363,37 @@ const getWorkspaceEndpointHealth = async (workspaceId, timeRange = '24h') => {
     }
   ]);
 
+  // 5. Aggregate WebhookEvents by endpoint for delivery-based success rate
+  const eventAgg = await WebhookEvent.aggregate([
+    { $match: { endpointId: { $in: endpointIds }, receivedAt: { $gte: since } } },
+    {
+      $group: {
+        _id: "$endpointId",
+        totalDeliveries: { $sum: 1 },
+        successfulDeliveries: { $sum: { $cond: [{ $eq: ["$status", "processed"] }, 1, 0] } },
+        failedDeliveries: { $sum: { $cond: [{ $eq: ["$status", "failed"] }, 1, 0] } },
+        deadLettered: { $sum: { $cond: [{ $eq: ["$status", "retry_exhausted"] }, 1, 0] } }
+      }
+    }
+  ]);
+
   const attemptMap = {};
   for (const stat of attemptAgg) {
     attemptMap[String(stat._id)] = stat;
+  }
+  
+  const eventMap = {};
+  for (const stat of eventAgg) {
+    eventMap[String(stat._id)] = stat;
   }
 
   // 6. Format and Classify Health
   const results = endpoints.map(ep => {
     const epIdStr = String(ep._id);
     const stats = attemptMap[epIdStr];
+    const eventStats = eventMap[epIdStr];
 
-    if (!stats || stats.totalAttempts === 0) {
+    if ((!stats || stats.totalAttempts === 0) && (!eventStats || eventStats.totalDeliveries === 0)) {
       return {
         _id: epIdStr,
         endpointId: ep.endpointId,
@@ -365,30 +416,40 @@ const getWorkspaceEndpointHealth = async (workspaceId, timeRange = '24h') => {
       };
     }
 
-    const completedAttempts = stats.successfulAttempts + stats.failedAttempts;
-    const successRate = completedAttempts > 0 ? (stats.successfulAttempts / completedAttempts) * 100 : 0;
-    const avgLatency = stats.latencyCount > 0 ? (stats.latencySum / stats.latencyCount) : 0;
-    const health = classifyEndpointHealth(successRate, avgLatency, completedAttempts);
+    const safeStats = stats || { totalAttempts: 0, successfulAttempts: 0, failedAttempts: 0, pendingAttempts: 0, latencySum: 0, latencyCount: 0, retryCount: 0, lastDeliveryAt: null };
+    const safeEventStats = eventStats || { totalDeliveries: 0, successfulDeliveries: 0, failedDeliveries: 0, deadLettered: 0 };
+
+    const completedAttempts = safeStats.successfulAttempts + safeStats.failedAttempts;
+    
+    // DELIVERY-BASED SUCCESS RATE calculation
+    const successRate = safeEventStats.totalDeliveries > 0 
+      ? (safeEventStats.successfulDeliveries / safeEventStats.totalDeliveries) * 100 
+      : 0;
+      
+    const avgLatency = safeStats.latencyCount > 0 ? (safeStats.latencySum / safeStats.latencyCount) : 0;
+    
+    // Health is now primarily based on delivery success rate
+    const health = classifyEndpointHealth(successRate, avgLatency, safeEventStats.totalDeliveries);
 
     return {
       _id: epIdStr,
       endpointId: ep.endpointId,
       destinationUrl: ep.destinationUrl,
       health,
-      totalAttempts: stats.totalAttempts,
-      successfulAttempts: stats.successfulAttempts,
-      failedAttempts: stats.failedAttempts,
-      pendingAttempts: stats.pendingAttempts,
+      totalAttempts: safeStats.totalAttempts,
+      successfulAttempts: safeStats.successfulAttempts,
+      failedAttempts: safeStats.failedAttempts,
+      pendingAttempts: safeStats.pendingAttempts,
       completedAttempts,
       successRate: Math.round(successRate * 100) / 100,
       averageLatencyMs: Math.round(avgLatency),
-      retryCount: stats.retryCount,
-      lastDeliveryAt: stats.lastDeliveryAt,
+      retryCount: safeStats.retryCount,
+      lastDeliveryAt: safeStats.lastDeliveryAt,
       // Legacy fields preserved for backward compatibility
-      totalDeliveries: stats.totalAttempts,
-      successfulDeliveries: stats.successfulAttempts,
-      failedDeliveries: stats.failedAttempts,
-      deadLettered: 0
+      totalDeliveries: safeEventStats.totalDeliveries,
+      successfulDeliveries: safeEventStats.successfulDeliveries,
+      failedDeliveries: safeEventStats.failedDeliveries,
+      deadLettered: safeEventStats.deadLettered
     };
   });
 

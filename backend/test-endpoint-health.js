@@ -118,7 +118,7 @@ async function testHealth() {
 
   if (hMap['http://retry'].totalAttempts !== 3) throw new Error(`Expected http://retry to have 3 total attempts`);
   if (hMap['http://retry'].retryCount !== 2) throw new Error(`Expected http://retry to have 2 retries`);
-  if (hMap['http://retry'].successRate !== 33.33) throw new Error(`Expected http://retry to have 33.33% success rate`);
+  if (hMap['http://retry'].successRate !== 100) throw new Error(`Expected http://retry to have 100% success rate (delivery-based)`);
 
   console.log('[PASS] Endpoint health semantics verified');
 
