@@ -66,7 +66,7 @@ async function runTests() {
     // 4. Rate Limiting Test - Authentication (Login)
     console.log('\n[Test] Authentication (Login) Rate Limiter');
     let loginStatus;
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 21; i++) {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
