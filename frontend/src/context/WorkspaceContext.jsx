@@ -11,7 +11,7 @@ export const WorkspaceProvider = ({ children }) => {
   const { user } = useAuth();
   const [workspaces, setWorkspaces] = useState([]);
   const [activeWorkspace, setActiveWorkspaceState] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!!user);
 
   // Wrapper that also persists to localStorage
   const setActiveWorkspace = (workspace) => {
@@ -30,6 +30,7 @@ export const WorkspaceProvider = ({ children }) => {
       setWorkspaces([]);
       setActiveWorkspaceState(null);
       localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
+      setLoading(false);
     }
   }, [user]);
 

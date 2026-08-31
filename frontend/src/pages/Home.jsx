@@ -7,7 +7,7 @@ import TrendChart from '../components/TrendChart';
 import { getErrorMessage } from '../utils/errorHandler';
 
 const Home = () => {
-  const { activeWorkspace, createWorkspace } = useWorkspace();
+  const { activeWorkspace, createWorkspace, loading: workspaceLoading } = useWorkspace();
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [error, setError] = useState('');
 
@@ -78,7 +78,12 @@ const Home = () => {
         )}
       </div>
 
-      {!activeWorkspace ? (
+      {workspaceLoading ? (
+        <div className="flex flex-col items-center justify-center h-[50vh] text-muted">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+          <p>Loading workspace...</p>
+        </div>
+      ) : !activeWorkspace ? (
         <div className="bg-surface border border-border rounded-xl p-8 max-w-md mx-auto mt-12 shadow-lg">
           <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-6 text-primary">
             <FolderKanban className="w-8 h-8" />

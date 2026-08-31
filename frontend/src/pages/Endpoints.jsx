@@ -30,8 +30,9 @@ const EndpointHealthBadge = ({ health }) => {
 };
 
 export default function Endpoints() {
-  const { activeWorkspace } = useWorkspace();
+  const { activeWorkspace, loading: workspaceLoading } = useWorkspace();
   const [projects, setProjects] = useState([]);
+  const [isProjectsLoading, setIsProjectsLoading] = useState(true);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [endpoints, setEndpoints] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -69,6 +70,7 @@ export default function Endpoints() {
   }, [selectedProjectId]);
 
   const fetchProjects = async () => {
+    setIsProjectsLoading(true);
     try {
       const res = await api.get(`/projects/${activeWorkspace._id}`);
       setProjects(res.data);
@@ -81,6 +83,8 @@ export default function Endpoints() {
       }
     } catch (err) {
       console.error('Error fetching projects:', err);
+    } finally {
+      setIsProjectsLoading(false);
     }
   };
 
@@ -158,6 +162,15 @@ export default function Endpoints() {
     }
   };
 
+  if (workspaceLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-muted">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+        <p>Loading workspace...</p>
+      </div>
+    );
+  }
+
   if (!activeWorkspace) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-muted">
@@ -200,23 +213,21 @@ export default function Endpoints() {
         </div>
       </div>
 
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-4 rounded-xl">
+      {isProjectsLoading || loading ? (
+        <div className="animate-pulse space-y-4 mt-6">
+          <div className="h-48 bg-surface/50 border border-border rounded-xl"></div>
+        </div>
+      ) : error ? (
+        <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-4 rounded-xl mt-6">
           {error}
         </div>
-      )}
-
-      {projects.length === 0 ? (
+      ) : projects.length === 0 ? (
         <div className="border-2 border-dashed border-border rounded-xl p-12 flex flex-col items-center justify-center text-center mt-6">
           <div className="w-12 h-12 bg-surface rounded-full flex items-center justify-center mb-4">
             <Webhook className="w-6 h-6 text-muted" />
           </div>
           <h3 className="text-lg font-medium text-text mb-1">No projects found in this workspace</h3>
           <p className="text-muted mb-4 max-w-sm">Create a project to automatically generate a webhook endpoint.</p>
-        </div>
-      ) : loading ? (
-        <div className="animate-pulse space-y-4 mt-6">
-          <div className="h-48 bg-surface/50 border border-border rounded-xl"></div>
         </div>
       ) : endpoints.length === 0 ? (
         <div className="border-2 border-dashed border-border rounded-xl p-12 flex flex-col items-center justify-center text-center mt-6">

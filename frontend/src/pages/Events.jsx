@@ -11,7 +11,7 @@ import EventStatusBadge from '../components/EventStatusBadge';
 import { getErrorMessage } from '../utils/errorHandler';
 
 export default function Events() {
-  const { activeWorkspace } = useWorkspace();
+  const { activeWorkspace, loading: workspaceLoading } = useWorkspace();
   const { socket } = useSocket();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -26,6 +26,7 @@ export default function Events() {
   const urlSearch = searchParams.get('search') || '';
 
   const [projects, setProjects] = useState([]);
+  const [isProjectsLoading, setIsProjectsLoading] = useState(true);
   const [selectedProjectId, setSelectedProjectId] = useState(urlProject);
 
   const [events, setEvents] = useState([]);
@@ -192,6 +193,7 @@ export default function Events() {
   }, [socket, selectedProjectId]);
 
   const fetchProjects = async () => {
+    setIsProjectsLoading(true);
     try {
       const res = await api.get(`/projects/${activeWorkspace._id}`);
       setProjects(res.data);
@@ -215,6 +217,8 @@ export default function Events() {
       }
     } catch (err) {
       console.error('Error fetching projects:', err);
+    } finally {
+      setIsProjectsLoading(false);
     }
   };
 
@@ -336,6 +340,15 @@ export default function Events() {
     }, { replace: true });
   };
 
+  if (workspaceLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-muted">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+        <p>Loading workspace...</p>
+      </div>
+    );
+  }
+
   if (!activeWorkspace) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-muted">
@@ -423,19 +436,19 @@ export default function Events() {
         </div>
       )}
 
-      {projects.length === 0 ? (
+      {isProjectsLoading || loading ? (
+        <div className="animate-pulse space-y-4 mt-6">
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="h-16 bg-surface/50 border border-border rounded-xl"></div>
+          ))}
+        </div>
+      ) : projects.length === 0 ? (
         <div className="border-2 border-dashed border-border rounded-xl p-12 flex flex-col items-center justify-center text-center mt-6">
           <div className="w-12 h-12 bg-surface rounded-full flex items-center justify-center mb-4">
             <FolderKanban className="w-6 h-6 text-muted" />
           </div>
           <h3 className="text-lg font-medium text-text mb-1">No projects found in this workspace</h3>
           <p className="text-muted mb-4 max-w-sm">You need a project to receive and view webhook events.</p>
-        </div>
-      ) : loading ? (
-        <div className="animate-pulse space-y-4">
-          {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} className="h-16 bg-surface/50 border border-border rounded-xl"></div>
-          ))}
         </div>
       ) : events.length === 0 ? (
         hasActiveFilters ? (

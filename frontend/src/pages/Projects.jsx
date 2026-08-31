@@ -5,7 +5,7 @@ import { FolderKanban, Plus, MoreVertical, X } from 'lucide-react';
 import { getErrorMessage } from '../utils/errorHandler';
 
 export default function Projects() {
-  const { activeWorkspace } = useWorkspace();
+  const { activeWorkspace, loading: workspaceLoading } = useWorkspace();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -67,6 +67,15 @@ export default function Projects() {
       setError(getErrorMessage(err, 'Failed to create workspace'));
     }
   };
+
+  if (workspaceLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[70vh] text-muted">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+        <p>Loading workspace...</p>
+      </div>
+    );
+  }
 
   if (!activeWorkspace) {
     return (
