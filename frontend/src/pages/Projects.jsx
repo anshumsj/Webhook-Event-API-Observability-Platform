@@ -5,35 +5,14 @@ import { FolderKanban, Plus, MoreVertical, X } from 'lucide-react';
 import { getErrorMessage } from '../utils/errorHandler';
 
 export default function Projects() {
-  const { activeWorkspace, loading: workspaceLoading } = useWorkspace();
-  const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { activeWorkspace, loading: workspaceLoading, projects, projectsLoading, refreshProjects } = useWorkspace();
   const [error, setError] = useState(null);
   
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [creatingProject, setCreatingProject] = useState(false);
 
-  useEffect(() => {
-    if (activeWorkspace) {
-      fetchProjects();
-    } else {
-      setLoading(false);
-    }
-  }, [activeWorkspace]);
 
-  const fetchProjects = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get(`/projects/${activeWorkspace._id}`);
-      setProjects(res.data);
-    } catch (err) {
-      setError(getErrorMessage(err, 'Failed to load projects'));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleCreateProject = async (e) => {
     e.preventDefault();
@@ -47,7 +26,7 @@ export default function Projects() {
       });
       setNewProjectName('');
       setShowCreateModal(false);
-      fetchProjects(); // Refresh the list
+      refreshProjects(); // Refresh the list
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to create project'));
     } finally {
@@ -129,7 +108,7 @@ export default function Projects() {
         </button>
       </div>
 
-      {loading ? (
+      {projectsLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3].map(i => (
             <div key={i} className="h-32 bg-surface/50 border border-border rounded-xl animate-pulse"></div>

@@ -11,7 +11,7 @@ import EventStatusBadge from '../components/EventStatusBadge';
 import { getErrorMessage } from '../utils/errorHandler';
 
 export default function Events() {
-  const { activeWorkspace, loading: workspaceLoading } = useWorkspace();
+  const { activeWorkspace, loading: workspaceLoading, projects, projectsLoading: isProjectsLoading } = useWorkspace();
   const { socket } = useSocket();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -24,9 +24,6 @@ export default function Events() {
   const urlEventType = searchParams.get('eventType') || '';
   const urlTimeRange = searchParams.get('timeRange') || 'All';
   const urlSearch = searchParams.get('search') || '';
-
-  const [projects, setProjects] = useState([]);
-  const [isProjectsLoading, setIsProjectsLoading] = useState(true);
   const [selectedProjectId, setSelectedProjectId] = useState(urlProject);
 
   const [events, setEvents] = useState([]);
@@ -68,17 +65,26 @@ export default function Events() {
     return () => clearTimeout(timer);
   }, [searchInput, debouncedSearch, setSearchParams]);
 
-  // 1. Fetch projects when workspace changes
   useEffect(() => {
-    if (activeWorkspace) {
-      fetchProjects();
+    if (projects.length > 0) {
+      setSelectedProjectId(current => {
+        if (!current || !projects.find(p => p._id === current)) {
+          const defaultId = projects[0]._id;
+          setSearchParams(prev => {
+            const p = new URLSearchParams(prev);
+            p.set('project', defaultId);
+            p.set('page', '1');
+            return p;
+          }, { replace: true });
+          setPagination(prev => ({ ...prev, page: 1 }));
+          return defaultId;
+        }
+        return current;
+      });
     } else {
-      setProjects([]);
       setSelectedProjectId('');
-      setEvents([]);
-      setLoading(false);
     }
-  }, [activeWorkspace]);
+  }, [projects, setSearchParams]);
 
   // 2. Fetch events when selected project or page changes
   useEffect(() => {
@@ -192,35 +198,7 @@ export default function Events() {
     return () => socket.off('webhook:event:updated', handleEventUpdate);
   }, [socket, selectedProjectId]);
 
-  const fetchProjects = async () => {
-    setIsProjectsLoading(true);
-    try {
-      const res = await api.get(`/projects/${activeWorkspace._id}`);
-      setProjects(res.data);
-      if (res.data.length > 0) {
-        setSelectedProjectId(current => {
-          if (!current || !res.data.find(p => p._id === current)) {
-            const defaultId = res.data[0]._id;
-            setSearchParams(prev => {
-              const p = new URLSearchParams(prev);
-              p.set('project', defaultId);
-              p.set('page', '1');
-              return p;
-            }, { replace: true });
-            setPagination(prev => ({ ...prev, page: 1 }));
-            return defaultId;
-          }
-          return current;
-        });
-      } else {
-        setSelectedProjectId('');
-      }
-    } catch (err) {
-      console.error('Error fetching projects:', err);
-    } finally {
-      setIsProjectsLoading(false);
-    }
-  };
+
 
   const fetchFilterOptions = async (projectId) => {
     try {

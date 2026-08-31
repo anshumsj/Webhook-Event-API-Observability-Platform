@@ -13,6 +13,32 @@ export const WorkspaceProvider = ({ children }) => {
   const [activeWorkspace, setActiveWorkspaceState] = useState(null);
   const [loading, setLoading] = useState(!!user);
 
+  const [projects, setProjects] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+
+  const refreshProjects = async (workspaceId = activeWorkspace?._id) => {
+    if (!workspaceId) return;
+    setProjectsLoading(true);
+    try {
+      const res = await api.get(`/projects/${workspaceId}`);
+      setProjects(res.data);
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+    } finally {
+      setProjectsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeWorkspace) {
+      setProjects([]);
+      refreshProjects(activeWorkspace._id);
+    } else {
+      setProjects([]);
+      setProjectsLoading(false);
+    }
+  }, [activeWorkspace]);
+
   // Wrapper that also persists to localStorage
   const setActiveWorkspace = (workspace) => {
     setActiveWorkspaceState(workspace);
@@ -72,7 +98,7 @@ export const WorkspaceProvider = ({ children }) => {
   };
 
   return (
-    <WorkspaceContext.Provider value={{ workspaces, activeWorkspace, setActiveWorkspace, createWorkspace, loading }}>
+    <WorkspaceContext.Provider value={{ workspaces, activeWorkspace, setActiveWorkspace, createWorkspace, loading, projects, projectsLoading, refreshProjects }}>
       {children}
     </WorkspaceContext.Provider>
   );

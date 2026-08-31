@@ -30,9 +30,7 @@ const EndpointHealthBadge = ({ health }) => {
 };
 
 export default function Endpoints() {
-  const { activeWorkspace, loading: workspaceLoading } = useWorkspace();
-  const [projects, setProjects] = useState([]);
-  const [isProjectsLoading, setIsProjectsLoading] = useState(true);
+  const { activeWorkspace, loading: workspaceLoading, projects, projectsLoading: isProjectsLoading } = useWorkspace();
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [endpoints, setEndpoints] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -52,14 +50,14 @@ export default function Endpoints() {
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
   useEffect(() => {
-    if (activeWorkspace) {
-      fetchProjects();
+    if (projects.length > 0) {
+      if (!selectedProjectId || !projects.find(p => p._id === selectedProjectId)) {
+        setSelectedProjectId(projects[0]._id);
+      }
     } else {
-      setProjects([]);
       setSelectedProjectId('');
-      setEndpoints([]);
     }
-  }, [activeWorkspace]);
+  }, [projects]);
 
   useEffect(() => {
     if (selectedProjectId) {
@@ -69,24 +67,6 @@ export default function Endpoints() {
     }
   }, [selectedProjectId]);
 
-  const fetchProjects = async () => {
-    setIsProjectsLoading(true);
-    try {
-      const res = await api.get(`/projects/${activeWorkspace._id}`);
-      setProjects(res.data);
-      if (res.data.length > 0) {
-        if (!selectedProjectId || !res.data.find(p => p._id === selectedProjectId)) {
-          setSelectedProjectId(res.data[0]._id);
-        }
-      } else {
-        setSelectedProjectId('');
-      }
-    } catch (err) {
-      console.error('Error fetching projects:', err);
-    } finally {
-      setIsProjectsLoading(false);
-    }
-  };
 
   const fetchEndpoints = async () => {
     if (!selectedProjectId) return;
