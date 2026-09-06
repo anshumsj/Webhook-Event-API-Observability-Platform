@@ -85,24 +85,35 @@ export default function Events() {
 
   useEffect(() => {
     if (projects.length > 0) {
-      setSelectedProjectId(current => {
-        if (!current || !projects.find(p => p._id === current)) {
-          const defaultId = projects[0]._id;
+      const urlProj = searchParams.get('project');
+      if (urlProj && projects.some(p => p._id === urlProj)) {
+        if (selectedProjectId !== urlProj) {
+          setSelectedProjectId(urlProj);
+          setPagination(prev => ({ ...prev, page: 1 }));
+        }
+      } else if (selectedProjectId && projects.some(p => p._id === selectedProjectId)) {
+        if (urlProj !== selectedProjectId) {
           setSearchParams(prev => {
             const p = new URLSearchParams(prev);
-            p.set('project', defaultId);
-            p.set('page', '1');
+            p.set('project', selectedProjectId);
             return p;
           }, { replace: true });
-          setPagination(prev => ({ ...prev, page: 1 }));
-          return defaultId;
         }
-        return current;
-      });
+      } else {
+        const defaultId = projects[0]._id;
+        setSelectedProjectId(defaultId);
+        setSearchParams(prev => {
+          const p = new URLSearchParams(prev);
+          p.set('project', defaultId);
+          p.set('page', '1');
+          return p;
+        }, { replace: true });
+        setPagination(prev => ({ ...prev, page: 1 }));
+      }
     } else {
       setSelectedProjectId('');
     }
-  }, [projects, setSearchParams]);
+  }, [projects, searchParams, selectedProjectId, setSearchParams]);
 
   // Fetch events when selected project or page/filters change
   useEffect(() => {
@@ -575,7 +586,7 @@ export default function Events() {
               No webhook deliveries recorded yet for this project. Send an event or verify your endpoint configuration.
             </p>
             <Link
-              to="/endpoints"
+              to={selectedProjectId ? `/endpoints?project=${selectedProjectId}` : '/endpoints'}
               className="inline-flex items-center gap-1.5 h-7 px-3 bg-primary text-canvas font-medium rounded text-xs hover:bg-primary-hover transition-colors"
             >
               <span>Manage Endpoints</span>

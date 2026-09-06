@@ -21,7 +21,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import StatusBadge from '../components/ui/StatusBadge';
 import ClipboardCopy from '../components/ClipboardCopy';
@@ -29,7 +29,9 @@ import { getErrorMessage } from '../utils/errorHandler';
 
 export default function Endpoints() {
   const { activeWorkspace, loading: workspaceLoading, projects, projectsLoading: isProjectsLoading } = useWorkspace();
-  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlProject = searchParams.get('project') || '';
+  const [selectedProjectId, setSelectedProjectId] = useState(urlProject);
   const [endpoints, setEndpoints] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -57,13 +59,51 @@ export default function Endpoints() {
 
   useEffect(() => {
     if (projects.length > 0) {
-      if (!selectedProjectId || !projects.find((p) => p._id === selectedProjectId)) {
-        setSelectedProjectId(projects[0]._id);
+      const urlProj = searchParams.get('project');
+      if (urlProj && projects.some((p) => p._id === urlProj)) {
+        if (selectedProjectId !== urlProj) {
+          setSelectedProjectId(urlProj);
+        }
+      } else if (selectedProjectId && projects.some((p) => p._id === selectedProjectId)) {
+        if (urlProj !== selectedProjectId) {
+          setSearchParams(
+            (prev) => {
+              const p = new URLSearchParams(prev);
+              p.set('project', selectedProjectId);
+              return p;
+            },
+            { replace: true }
+          );
+        }
+      } else {
+        const defaultId = projects[0]._id;
+        setSelectedProjectId(defaultId);
+        setSearchParams(
+          (prev) => {
+            const p = new URLSearchParams(prev);
+            p.set('project', defaultId);
+            return p;
+          },
+          { replace: true }
+        );
       }
     } else {
       setSelectedProjectId('');
     }
-  }, [projects, selectedProjectId]);
+  }, [projects, searchParams, selectedProjectId, setSearchParams]);
+
+  const handleProjectChange = (e) => {
+    const newId = e.target.value;
+    setSelectedProjectId(newId);
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        p.set('project', newId);
+        return p;
+      },
+      { replace: true }
+    );
+  };
 
   const fetchEndpoints = useCallback(async () => {
     if (!selectedProjectId) return;
@@ -217,13 +257,17 @@ export default function Endpoints() {
 
         <div className="flex items-center gap-2 flex-wrap">
           {projects.length > 0 && (
-            <div className="w-[180px]">
-              <select
-                value={selectedProjectId}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
-                disabled={projects.length === 0}
-                className="w-full h-8 px-2.5 bg-canvas border border-border rounded text-xs text-text font-sans focus:outline-none focus:border-primary cursor-pointer"
-              >
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-mono uppercase text-muted tracking-wider">
+                Project:
+              </span>
+              <div className="w-[180px]">
+                <select
+                  value={selectedProjectId}
+                  onChange={handleProjectChange}
+                  disabled={projects.length === 0}
+                  className="w-full h-8 px-2.5 bg-canvas border border-border rounded text-xs text-text font-sans focus:outline-none focus:border-primary cursor-pointer"
+                >
                 {projects.map((p) => (
                   <option key={p._id} value={p._id}>
                     {p.name}
@@ -231,7 +275,8 @@ export default function Endpoints() {
                 ))}
               </select>
             </div>
-          )}
+          </div>
+        )}
 
           <Button
             variant="secondary"
