@@ -147,8 +147,50 @@ const updateEndpoint = async (req, res) => {
   }
 };
 
+const deleteEndpoint = async (req, res) => {
+  try {
+    const { endpointId } = req.params;
+    const userId = req.user.id;
+
+    // 1. Find the endpoint
+    const endpoint = await WebhookEndpoint.findOne({ endpointId });
+    if (!endpoint) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Webhook endpoint not found', requestId: req ? req.requestId : 'unknown' } });
+    }
+
+    // 2. Find its project
+    const project = await Project.findById(endpoint.projectId);
+    if (!project) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Associated project not found', requestId: req ? req.requestId : 'unknown' } });
+    }
+
+    if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== project.workspaceId.toString()) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
+    }
+
+    // 3. Authorize via workspace
+    const workspace = await Workspace.findOne({
+      _id: project.workspaceId,
+      $or: [{ owner: userId }, { members: userId }]
+    });
+
+    if (!workspace) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to delete this endpoint', requestId: req ? req.requestId : 'unknown' } });
+    }
+
+    // 4. Delete only the WebhookEndpoint document (preserve WebhookEvents and DeliveryAttempts)
+    await WebhookEndpoint.deleteOne({ _id: endpoint._id });
+
+    res.status(200).json({ success: true, message: 'Endpoint deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting endpoint:', error.message);
+    res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'We couldn\'t delete your endpoint at this time. Please try again.', requestId: req ? req.requestId : 'unknown' } });
+  }
+};
+
 module.exports = {
   getEndpointsByProject,
   createEndpoint,
-  updateEndpoint
+  updateEndpoint,
+  deleteEndpoint
 };
