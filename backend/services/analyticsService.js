@@ -35,11 +35,7 @@ const getProjectAnalytics = async (projectId, timeRange = '30d') => {
     timeRange = '30d';
   }
 
-  // 1. Get endpoints for the project to scope DeliveryAttempt queries
-  const endpoints = await WebhookEndpoint.find({ projectId: objectId }).select('_id');
-  const endpointIds = endpoints.map(ep => ep._id);
-
-  // 2. Aggregate WebhookEvents
+  // 1. Aggregate WebhookEvents
   const eventAgg = await WebhookEvent.aggregate([
     { $match: { projectId: objectId, receivedAt: { $gte: since } } },
     { $group: {
@@ -47,7 +43,8 @@ const getProjectAnalytics = async (projectId, timeRange = '30d') => {
         totalEvents: { $sum: 1 },
         processedEvents: { $sum: { $cond: [{ $eq: ["$status", "processed"] }, 1, 0] } },
         failedEvents: { $sum: { $cond: [{ $eq: ["$status", "failed"] }, 1, 0] } },
-        retryExhaustedEvents: { $sum: { $cond: [{ $eq: ["$status", "retry_exhausted"] }, 1, 0] } }
+        retryExhaustedEvents: { $sum: { $cond: [{ $eq: ["$status", "retry_exhausted"] }, 1, 0] } },
+        eventIds: { $push: "$_id" }
     }}
   ]);
 
@@ -55,16 +52,17 @@ const getProjectAnalytics = async (projectId, timeRange = '30d') => {
     totalEvents: 0,
     processedEvents: 0,
     failedEvents: 0,
-    retryExhaustedEvents: 0
+    retryExhaustedEvents: 0,
+    eventIds: []
   };
 
   let retriedEvents = 0;
   let averageLatencyMs = 0;
 
-  // 3. Aggregate DeliveryAttempts (if there are endpoints)
-  if (endpointIds.length > 0) {
+  // 2. Aggregate DeliveryAttempts matching the project's events
+  if (eventStats.eventIds && eventStats.eventIds.length > 0) {
     const attemptAgg = await DeliveryAttempt.aggregate([
-      { $match: { endpointId: { $in: endpointIds }, startedAt: { $gte: since } } },
+      { $match: { webhookEventId: { $in: eventStats.eventIds } } },
       { $facet: {
           retryStats: [
             { $group: { _id: "$webhookEventId", attemptCount: { $sum: 1 } } },
