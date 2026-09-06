@@ -3,11 +3,21 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useSocket } from '../context/SocketContext';
 import api from '../services/api';
-import { Activity, Clock, FolderKanban, ArrowUp, Filter } from 'lucide-react';
+import {
+  Activity,
+  FolderKanban,
+  ArrowUp,
+  Filter,
+  Copy,
+  Check,
+  RefreshCw,
+  X,
+} from 'lucide-react';
 import { format } from 'date-fns';
 import EventFilters from '../components/EventFilters';
 import Pagination from '../components/Pagination';
-import EventStatusBadge from '../components/EventStatusBadge';
+import StatusBadge from '../components/ui/StatusBadge';
+import Button from '../components/ui/Button';
 import { getErrorMessage } from '../utils/errorHandler';
 
 export default function Events() {
@@ -31,6 +41,7 @@ export default function Events() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [newEventsCount, setNewEventsCount] = useState(0);
+  const [copiedId, setCopiedId] = useState(null);
 
   // Filters State
   const [statusFilter, setStatusFilter] = useState(urlStatus);
@@ -41,7 +52,14 @@ export default function Events() {
   const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
   const [sortOrder, setSortOrder] = useState(urlOrder);
 
-  const hasActiveFilters = Boolean(statusFilter || endpointFilter || eventTypeFilter || timeRangeFilter !== 'All' || debouncedSearch || sortOrder !== 'desc');
+  const hasActiveFilters = Boolean(
+    statusFilter ||
+    endpointFilter ||
+    eventTypeFilter ||
+    timeRangeFilter !== 'All' ||
+    debouncedSearch ||
+    sortOrder !== 'desc'
+  );
 
   // Dropdown options
   const [endpoints, setEndpoints] = useState([]);
@@ -86,7 +104,7 @@ export default function Events() {
     }
   }, [projects, setSearchParams]);
 
-  // 2. Fetch events when selected project or page changes
+  // Fetch events when selected project or page/filters change
   useEffect(() => {
     if (selectedProjectId) {
       fetchFilterOptions(selectedProjectId);
@@ -99,14 +117,13 @@ export default function Events() {
     }
   }, [selectedProjectId, pagination.page, statusFilter, endpointFilter, eventTypeFilter, timeRangeFilter, debouncedSearch, sortOrder]);
 
-  // Ref that always reflects the latest pagination state — never stale inside a closure.
+  // Ref that always reflects the latest pagination state
   const paginationRef = useRef(pagination);
   useEffect(() => {
     paginationRef.current = pagination;
   }, [pagination]);
 
-  // 3. Join / leave the Socket.IO project room.
-  //    Separated from the event handler so the listener is NOT re-registered on every page change.
+  // Join / leave the Socket.IO project room
   useEffect(() => {
     if (!socket || !selectedProjectId) return;
     socket.emit('join_project', selectedProjectId);
@@ -115,8 +132,7 @@ export default function Events() {
     };
   }, [socket, selectedProjectId]);
 
-  // Keep a fresh reference to fetchEvents to use inside the socket reconnect listener
-  // without triggering continuous re-renders.
+  // Keep a fresh reference to fetchEvents for reconnect reconciliation
   const fetchEventsRef = useRef(null);
   useEffect(() => {
     fetchEventsRef.current = fetchEvents;
@@ -127,7 +143,6 @@ export default function Events() {
     if (!socket || !selectedProjectId) return;
 
     const handleReconnect = () => {
-      console.log('[Events] Socket reconnected. Re-joining room and reconciling events...');
       socket.emit('join_project', selectedProjectId);
       if (fetchEventsRef.current) fetchEventsRef.current();
     };
@@ -139,8 +154,7 @@ export default function Events() {
     };
   }, [socket, selectedProjectId]);
 
-  // 4. Single stable webhook:event:created listener per project.
-  //    Reads current page from paginationRef — always fresh, no stale closure.
+  // Single stable webhook:event:created listener
   useEffect(() => {
     if (!socket || !selectedProjectId) return;
 
@@ -150,7 +164,6 @@ export default function Events() {
       const { page, limit } = paginationRef.current;
 
       if (page === 1) {
-        // On page 1 → prepend event, trim to limit, update total
         setEvents(prev => {
           if (prev.some(e => e.eventId === newEvent.eventId)) return prev;
           const updated = [newEvent, ...prev];
@@ -163,7 +176,6 @@ export default function Events() {
           totalPages: Math.ceil((prev.total + 1) / prev.limit),
         }));
       } else {
-        // On page 2+ → do NOT touch the visible list, just show the banner
         setNewEventsCount(count => count + 1);
         setPagination(prev => ({
           ...prev,
@@ -175,11 +187,9 @@ export default function Events() {
 
     socket.on('webhook:event:created', handleNewEvent);
     return () => socket.off('webhook:event:created', handleNewEvent);
-  }, [socket, selectedProjectId]); // ← no pagination deps — ref handles freshness
+  }, [socket, selectedProjectId]);
 
-  // 5. webhook:event:updated — worker finished processing.
-  //    Patch the status and processingTimeMs of the matching row in-place.
-  //    No re-fetch needed — just a targeted mutation of existing state.
+  // webhook:event:updated — patch status and processingTimeMs in-place
   useEffect(() => {
     if (!socket || !selectedProjectId) return;
 
@@ -197,8 +207,6 @@ export default function Events() {
     socket.on('webhook:event:updated', handleEventUpdate);
     return () => socket.off('webhook:event:updated', handleEventUpdate);
   }, [socket, selectedProjectId]);
-
-
 
   const fetchFilterOptions = async (projectId) => {
     try {
@@ -229,7 +237,7 @@ export default function Events() {
 
       if (timeRangeFilter && timeRangeFilter !== 'All') {
         const now = new Date();
-        let from = new Date();
+        const from = new Date();
         if (timeRangeFilter === '24h') from.setHours(from.getHours() - 24);
         else if (timeRangeFilter === '7d') from.setDate(from.getDate() - 7);
         else if (timeRangeFilter === '30d') from.setDate(from.getDate() - 30);
@@ -241,7 +249,6 @@ export default function Events() {
       setEvents(res.data.events);
       setPagination(res.data.pagination);
 
-      // Clear new events count when returning to page 1
       if (pageToFetch === 1) {
         setNewEventsCount(0);
       }
@@ -318,11 +325,53 @@ export default function Events() {
     }, { replace: true });
   };
 
+  const handleCopyEventId = (e, eventId) => {
+    e.stopPropagation();
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(eventId);
+    }
+    setCopiedId(eventId);
+    setTimeout(() => {
+      setCopiedId(current => (current === eventId ? null : current));
+    }, 1500);
+  };
+
+  const getEndpointHostname = (event) => {
+    let ep = null;
+    if (event.endpointId) {
+      ep = endpoints.find(e => e._id === event.endpointId || e.endpointId === event.endpointId);
+    }
+    if (!ep && endpointFilter) {
+      ep = endpoints.find(e => e.endpointId === endpointFilter);
+    }
+    if (!ep && endpoints.length === 1) {
+      ep = endpoints[0];
+    }
+    if (ep?.destinationUrl) {
+      try {
+        return new URL(ep.destinationUrl).host;
+      } catch {
+        return ep.destinationUrl;
+      }
+    }
+    if (ep?.name) return ep.name;
+    return ep?.endpointId || '—';
+  };
+
+  const formatTimestamp = (dateStr) => {
+    if (!dateStr) return '—';
+    try {
+      return format(new Date(dateStr), 'MMM d, yyyy HH:mm:ss');
+    } catch {
+      return String(dateStr);
+    }
+  };
+
   if (workspaceLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-muted">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
-        <p>Loading workspace...</p>
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mb-3" />
+        <p className="text-xs font-mono">Loading workspace...</p>
       </div>
     );
   }
@@ -330,56 +379,68 @@ export default function Events() {
   if (!activeWorkspace) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-muted">
-        <p>No active workspace selected. Please log in or create a workspace.</p>
+        <p className="text-xs font-mono">No active workspace selected.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-3">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-text">Events</h1>
-          <p className="text-muted mt-1">Real-time webhook events for your project</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-base font-semibold text-text tracking-tight">Event Explorer</h1>
+            <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-surface-2 border border-border text-muted">
+              <span className="w-1.5 h-1.5 rounded-full bg-success" />
+              Live
+            </span>
+          </div>
+          <p className="text-xs text-muted mt-0.5">
+            Real-time webhook delivery attempts and latency diagnostics
+          </p>
         </div>
-        <div className="flex items-center gap-4">
-          <select
-            className="bg-background border border-border text-text text-sm rounded-lg focus:ring-primary focus:border-primary block p-2 transition-colors"
-            value={selectedProjectId}
-            onChange={(e) => {
-              const newProject = e.target.value;
-              setSelectedProjectId(newProject);
-              setPagination(prev => ({ ...prev, page: 1 }));
-              setSearchParams(prev => {
-                const p = new URLSearchParams(prev);
-                p.set('project', newProject);
-                p.set('page', '1');
-                return p;
-              }, { replace: true });
-            }}
-            disabled={projects.length === 0}
-          >
-            {projects.length === 0 ? (
-              <option value="">No projects available</option>
-            ) : (
-              projects.map(p => (
-                <option key={p._id} value={p._id}>{p.name}</option>
-              ))
-            )}
-          </select>
 
-          <button
+        <div className="flex items-center gap-2">
+          {projects.length > 0 && (
+            <div className="w-[180px]">
+              <select
+                value={selectedProjectId}
+                onChange={(e) => {
+                  const newProject = e.target.value;
+                  setSelectedProjectId(newProject);
+                  setPagination(prev => ({ ...prev, page: 1 }));
+                  setSearchParams(prev => {
+                    const p = new URLSearchParams(prev);
+                    p.set('project', newProject);
+                    p.set('page', '1');
+                    return p;
+                  }, { replace: true });
+                }}
+                className="w-full h-8 px-2.5 bg-surface-1 border border-border rounded text-xs text-text font-sans focus:outline-none focus:border-primary cursor-pointer"
+                disabled={projects.length === 0}
+              >
+                {projects.map(p => (
+                  <option key={p._id} value={p._id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => fetchEvents()}
-            disabled={!selectedProjectId}
-            className="flex items-center gap-2 bg-surface border border-border text-text px-4 py-2 rounded-lg font-medium hover:bg-white/5 transition-colors disabled:opacity-50"
+            disabled={!selectedProjectId || loading}
+            title="Refresh events list"
           >
-            <Activity className="w-4 h-4" />
-            Refresh
-          </button>
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </Button>
         </div>
       </div>
 
-      {/* Filter Bar */}
+      {/* Filter Toolbar */}
       {selectedProjectId && (
         <EventFilters
           searchInput={searchInput}
@@ -396,102 +457,235 @@ export default function Events() {
         />
       )}
 
+      {/* Error Alert */}
       {error && (
-        <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-4 rounded-xl">
-          {error}
-        </div>
-      )}
-
-      {newEventsCount > 0 && pagination.page > 1 && (
-        <div className="flex justify-center">
+        <div className="bg-failure/10 border border-failure/30 text-failure px-3.5 py-2.5 rounded text-xs flex items-center justify-between">
+          <span>{error}</span>
           <button
-            onClick={() => handlePageChange(1)}
-            className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-full font-medium shadow-lg hover:shadow-primary/25 hover:-translate-y-0.5 transition-all animate-in fade-in slide-in-from-top-4"
+            onClick={() => fetchEvents()}
+            className="text-xs underline hover:no-underline font-mono ml-4 cursor-pointer"
           >
-            <ArrowUp className="w-4 h-4" />
-            {newEventsCount} new event{newEventsCount > 1 ? 's' : ''} available
+            Retry
           </button>
         </div>
       )}
 
+      {/* Subtle Live Update Indicator (for page > 1, does not shift scroll) */}
+      {newEventsCount > 0 && pagination.page > 1 && (
+        <div className="flex items-center justify-between px-3.5 py-2 bg-surface-1 border border-primary/30 rounded text-xs font-mono">
+          <div className="flex items-center gap-2 text-text">
+            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span>
+              {newEventsCount} new event{newEventsCount > 1 ? 's' : ''} received
+            </span>
+          </div>
+          <button
+            onClick={() => handlePageChange(1)}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 transition-colors text-xs font-medium cursor-pointer"
+          >
+            <ArrowUp className="w-3 h-3" />
+            <span>Jump to page 1</span>
+          </button>
+        </div>
+      )}
+
+      {/* Main Content Area */}
       {isProjectsLoading || loading ? (
-        <div className="animate-pulse space-y-4 mt-6">
-          {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} className="h-16 bg-surface/50 border border-border rounded-xl"></div>
-          ))}
+        <div className="bg-surface-1 border border-border rounded overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-surface-2/60 border-b border-border select-none">
+                <tr>
+                  <th className="px-3.5 py-2 font-mono text-[11px] uppercase tracking-wider text-muted font-medium w-[210px]">
+                    Event ID
+                  </th>
+                  <th className="px-3.5 py-2 font-mono text-[11px] uppercase tracking-wider text-muted font-medium min-w-[180px]">
+                    Method / Type
+                  </th>
+                  <th className="px-3.5 py-2 font-mono text-[11px] uppercase tracking-wider text-muted font-medium w-[130px]">
+                    Status
+                  </th>
+                  <th className="px-3.5 py-2 font-mono text-[11px] uppercase tracking-wider text-muted font-medium min-w-[150px]">
+                    Destination
+                  </th>
+                  <th className="px-3.5 py-2 font-mono text-[11px] uppercase tracking-wider text-muted font-medium text-right w-[110px]">
+                    Duration
+                  </th>
+                  <th className="px-3.5 py-2 font-mono text-[11px] uppercase tracking-wider text-muted font-medium text-right w-[170px]">
+                    Timestamp
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {[...Array(8)].map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    <td className="px-3.5 py-2.5">
+                      <div className="h-3.5 w-32 bg-surface-2 rounded" />
+                    </td>
+                    <td className="px-3.5 py-2.5">
+                      <div className="h-3.5 w-28 bg-surface-2 rounded" />
+                    </td>
+                    <td className="px-3.5 py-2.5">
+                      <div className="h-3.5 w-20 bg-surface-2 rounded" />
+                    </td>
+                    <td className="px-3.5 py-2.5">
+                      <div className="h-3.5 w-24 bg-surface-2 rounded" />
+                    </td>
+                    <td className="px-3.5 py-2.5 text-right">
+                      <div className="h-3.5 w-14 bg-surface-2 rounded ml-auto" />
+                    </td>
+                    <td className="px-3.5 py-2.5 text-right">
+                      <div className="h-3.5 w-28 bg-surface-2 rounded ml-auto" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : projects.length === 0 ? (
-        <div className="border-2 border-dashed border-border rounded-xl p-12 flex flex-col items-center justify-center text-center mt-6">
-          <div className="w-12 h-12 bg-surface rounded-full flex items-center justify-center mb-4">
-            <FolderKanban className="w-6 h-6 text-muted" />
-          </div>
-          <h3 className="text-lg font-medium text-text mb-1">No projects found in this workspace</h3>
-          <p className="text-muted mb-4 max-w-sm">You need a project to receive and view webhook events.</p>
+        <div className="bg-surface-1 border border-border border-dashed rounded p-10 flex flex-col items-center justify-center text-center">
+          <FolderKanban className="w-6 h-6 text-muted mb-2.5" />
+          <h3 className="text-sm font-medium text-text mb-1">No Projects in Workspace</h3>
+          <p className="text-xs text-muted max-w-sm">
+            Create a project to configure webhook endpoints and stream telemetry events.
+          </p>
         </div>
       ) : events.length === 0 ? (
         hasActiveFilters ? (
-          <div className="border-2 border-dashed border-border rounded-xl p-12 flex flex-col items-center justify-center text-center mt-6">
-            <div className="w-12 h-12 bg-surface rounded-full flex items-center justify-center mb-4">
-              <Filter className="w-6 h-6 text-muted" />
-            </div>
-            <h3 className="text-lg font-medium text-text mb-1">No deliveries match your current filters.</h3>
-            <p className="text-muted mb-4 max-w-sm">Try adjusting or clearing your filters to see more events.</p>
+          <div className="bg-surface-1 border border-border border-dashed rounded p-10 flex flex-col items-center justify-center text-center">
+            <Filter className="w-6 h-6 text-muted mb-2.5" />
+            <h3 className="text-sm font-medium text-text mb-1">No Matching Deliveries</h3>
+            <p className="text-xs text-muted max-w-sm mb-3">
+              No events matched your current filter criteria. Adjust or reset filters to view deliveries.
+            </p>
+            <button
+              onClick={handleClearFilters}
+              className="inline-flex items-center gap-1 h-7 px-3 rounded bg-surface-2 border border-border text-xs text-text hover:bg-surface-3 transition-colors font-mono cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Reset Filters</span>
+            </button>
           </div>
         ) : (
-          <div className="border-2 border-dashed border-border rounded-xl p-12 flex flex-col items-center justify-center text-center mt-6">
-            <div className="w-12 h-12 bg-surface rounded-full flex items-center justify-center mb-4">
-              <Activity className="w-6 h-6 text-muted" />
-            </div>
-            <h3 className="text-lg font-medium text-text mb-1">No events yet</h3>
-            <p className="text-muted mb-4 max-w-sm">Create an endpoint and send your first webhook.</p>
-            <Link to="/endpoints" className="mt-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors">
-              Create an endpoint
+          <div className="bg-surface-1 border border-border border-dashed rounded p-10 flex flex-col items-center justify-center text-center">
+            <Activity className="w-6 h-6 text-muted mb-2.5" />
+            <h3 className="text-sm font-medium text-text mb-1">Awaiting Ingest Stream</h3>
+            <p className="text-xs text-muted max-w-sm mb-3">
+              No webhook deliveries recorded yet for this project. Send an event or verify your endpoint configuration.
+            </p>
+            <Link
+              to="/endpoints"
+              className="inline-flex items-center gap-1.5 h-7 px-3 bg-primary text-canvas font-medium rounded text-xs hover:bg-primary-hover transition-colors"
+            >
+              <span>Manage Endpoints</span>
             </Link>
           </div>
         )
       ) : (
-        <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm flex flex-col">
+        <div className="bg-surface-1 border border-border rounded overflow-hidden flex flex-col">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-text">
-              <thead className="text-xs text-muted uppercase bg-surface border-b border-border">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-surface-2/60 border-b border-border select-none">
                 <tr>
-                  <th className="px-6 py-4 font-semibold">Event ID</th>
-                  <th className="px-6 py-4 font-semibold">Event Type</th>
-                  <th className="px-6 py-4 font-semibold">Status</th>
-                  <th className="px-6 py-4 font-semibold">Timestamp</th>
-                  <th className="px-6 py-4 font-semibold text-right">Processing Time</th>
+                  <th className="px-3.5 py-2 font-mono text-[11px] uppercase tracking-wider text-muted font-medium w-[210px]">
+                    Event ID
+                  </th>
+                  <th className="px-3.5 py-2 font-mono text-[11px] uppercase tracking-wider text-muted font-medium min-w-[180px]">
+                    Method / Type
+                  </th>
+                  <th className="px-3.5 py-2 font-mono text-[11px] uppercase tracking-wider text-muted font-medium w-[130px]">
+                    Status
+                  </th>
+                  <th className="px-3.5 py-2 font-mono text-[11px] uppercase tracking-wider text-muted font-medium min-w-[150px]">
+                    Destination
+                  </th>
+                  <th className="px-3.5 py-2 font-mono text-[11px] uppercase tracking-wider text-muted font-medium text-right w-[110px]">
+                    Duration
+                  </th>
+                  <th className="px-3.5 py-2 font-mono text-[11px] uppercase tracking-wider text-muted font-medium text-right w-[170px]">
+                    Timestamp
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-border/50">
                 {events.map((event) => (
                   <tr
                     key={event._id || event.eventId}
                     onClick={() => navigate(`/events/${event.eventId}`, { state: { search: searchParams.toString() } })}
-                    className="hover:bg-white/5 transition-colors group cursor-pointer"
+                    className="hover:bg-surface-2/60 transition-colors group cursor-pointer"
                   >
-                    <td className="px-6 py-4 font-mono text-xs text-muted group-hover:text-primary transition-colors">
-                      {event.eventId.substring(0, 12)}...
+                    {/* Event ID with one-click copy affordance */}
+                    <td className="px-3.5 py-2.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className="font-mono text-xs text-text group-hover:text-primary transition-colors tracking-tight select-all truncate"
+                          title={event.eventId}
+                        >
+                          {event.eventId.length > 18 ? `${event.eventId.slice(0, 16)}…` : event.eventId}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyEventId(e, event.eventId)}
+                          className="p-1 text-muted hover:text-text rounded hover:bg-surface-2 transition-colors opacity-60 group-hover:opacity-100 shrink-0"
+                          title="Copy full Event ID"
+                          aria-label="Copy Event ID"
+                        >
+                          {copiedId === event.eventId ? (
+                            <Check className="w-3.5 h-3.5 text-success" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="bg-primary/10 text-primary border border-primary/20 px-2.5 py-1 rounded-md font-mono text-xs">
-                        {event.eventType}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <EventStatusBadge status={event.status} />
-                    </td>
-                    <td className="px-6 py-4 text-muted">
-                      {format(new Date(event.receivedAt), 'MMM d, yyyy HH:mm:ss')}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5 text-muted">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>
-                          {event.status === 'processed' || event.status === 'failed'
-                            ? `${event.processingTimeMs} ms`
-                            : 'Pending'}
+
+                    {/* Method & Event Type */}
+                    <td className="px-3.5 py-2.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-[10px] font-mono font-semibold px-1 py-0.5 rounded bg-surface-2 border border-border text-muted uppercase shrink-0">
+                          POST
+                        </span>
+                        <span
+                          className="font-mono text-xs text-text font-medium truncate max-w-[220px]"
+                          title={event.eventType}
+                        >
+                          {event.eventType}
                         </span>
                       </div>
+                    </td>
+
+                    {/* Status Badge */}
+                    <td className="px-3.5 py-2.5">
+                      <StatusBadge status={event.status} size="sm" />
+                    </td>
+
+                    {/* Destination Hostname */}
+                    <td className="px-3.5 py-2.5">
+                      <span
+                        className="font-mono text-xs text-muted truncate max-w-[180px] block"
+                        title={getEndpointHostname(event)}
+                      >
+                        {getEndpointHostname(event)}
+                      </span>
+                    </td>
+
+                    {/* Duration */}
+                    <td className="px-3.5 py-2.5 text-right">
+                      <div className="flex items-center justify-end font-mono text-xs text-muted">
+                        {event.status === 'processed' || event.status === 'failed' || event.status === 'retry_exhausted' ? (
+                          <span>{event.processingTimeMs ?? 0} ms</span>
+                        ) : (
+                          <span className="text-muted/50 font-sans text-xs">Pending</span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Timestamp */}
+                    <td className="px-3.5 py-2.5 text-right">
+                      <span className="font-mono text-[11px] text-muted whitespace-nowrap">
+                        {formatTimestamp(event.receivedAt)}
+                      </span>
                     </td>
                   </tr>
                 ))}
