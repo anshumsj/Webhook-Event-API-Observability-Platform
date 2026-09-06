@@ -11,6 +11,11 @@
     "start:frontend": "npm --workspace=frontend run dev",
     "dev": "npm run start:backend & npm run start:frontend",
     "test": "npm --workspace=backend run test",
-    "mock-server": "npm --workspace=backend run mock-server"
+    "lint": "npm --workspace=frontend run lint",
+    "build": "npm --workspace=frontend run build",
+    "mock-server": "npm --workspace=backend run mock-server",
+    "benchmark:db": "npm --workspace=backend run benchmark:db",
+    "benchmark:rate-limit": "npm --workspace=backend run benchmark:rate-limit",
+    "diagnose:redis": "npm --workspace=backend run diagnose:redis"
   }
 }

@@ -38,6 +38,9 @@ const AppRoutes = () => {
           <Route path="/events/:eventId" element={<EventDetails />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
+
+        {/* Catch-all wildcard redirect to dashboard/login */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   );
