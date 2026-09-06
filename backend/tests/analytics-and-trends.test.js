@@ -4,6 +4,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const {
+  classifyEndpointHealth,
   getWorkspaceAnalytics,
   getWorkspaceEndpointHealth,
   getWorkspaceDeliveryTrends,
@@ -196,8 +197,48 @@ async function runAnalyticsAndTrendsTests() {
     }
     console.log('[PASS] Delivery trends 7d daily bucketing verified.');
 
-    // 6. Test Endpoint Health Classification
-    console.log('Testing endpoint health metrics...');
+    // 6. Test Endpoint Health Classification & Classifier Boundary Semantics
+    console.log('Testing endpoint health metrics and classifier boundary semantics...');
+    
+    // Verify all 9 classifier boundary scenarios:
+    // 1. 0 attempts => no_data
+    if (classifyEndpointHealth(0, 0, 0) !== 'no_data') {
+      throw new Error(`Expected 'no_data' for 0 attempts, got ${classifyEndpointHealth(0, 0, 0)}`);
+    }
+    // 2. 100% success + 500ms => healthy
+    if (classifyEndpointHealth(100, 500, 1) !== 'healthy') {
+      throw new Error(`Expected 'healthy' for 100% success + 500ms, got ${classifyEndpointHealth(100, 500, 1)}`);
+    }
+    // 3. 100% success + 999ms => healthy
+    if (classifyEndpointHealth(100, 999, 1) !== 'healthy') {
+      throw new Error(`Expected 'healthy' for 100% success + 999ms, got ${classifyEndpointHealth(100, 999, 1)}`);
+    }
+    // 4. 100% success + 1000ms => degraded
+    if (classifyEndpointHealth(100, 1000, 1) !== 'degraded') {
+      throw new Error(`Expected 'degraded' for 100% success + 1000ms, got ${classifyEndpointHealth(100, 1000, 1)}`);
+    }
+    // 5. 100% success + 1087ms => degraded (production scenario 1)
+    if (classifyEndpointHealth(100, 1087, 1) !== 'degraded') {
+      throw new Error(`Expected 'degraded' for 100% success + 1087ms, got ${classifyEndpointHealth(100, 1087, 1)}`);
+    }
+    // 6. 98% success + 500ms => degraded
+    if (classifyEndpointHealth(98, 500, 100) !== 'degraded') {
+      throw new Error(`Expected 'degraded' for 98% success + 500ms, got ${classifyEndpointHealth(98, 500, 100)}`);
+    }
+    // 7. 80% success + 500ms => degraded
+    if (classifyEndpointHealth(80, 500, 10) !== 'degraded') {
+      throw new Error(`Expected 'degraded' for 80% success + 500ms, got ${classifyEndpointHealth(80, 500, 10)}`);
+    }
+    // 8. 79.99% success + 500ms => unhealthy
+    if (classifyEndpointHealth(79.99, 500, 100) !== 'unhealthy') {
+      throw new Error(`Expected 'unhealthy' for 79.99% success + 500ms, got ${classifyEndpointHealth(79.99, 500, 100)}`);
+    }
+    // 9. 71.43% success + 640ms => unhealthy (production scenario 2)
+    if (classifyEndpointHealth(71.43, 640, 7) !== 'unhealthy') {
+      throw new Error(`Expected 'unhealthy' for 71.43% success + 640ms, got ${classifyEndpointHealth(71.43, 640, 7)}`);
+    }
+    console.log('[PASS] All 9 classifier boundary semantics verified (healthy, degraded, unhealthy, no_data).');
+
     const healthResult = await getEndpointHealth(project._id);
     if (!Array.isArray(healthResult) || healthResult.length !== 1) {
       throw new Error('Expected 1 endpoint in health result array');
@@ -206,6 +247,7 @@ async function runAnalyticsAndTrendsTests() {
     if (epStat.totalAttempts !== 5) throw new Error(`Expected 5 total attempts, got ${epStat.totalAttempts}`);
     if (epStat.successfulAttempts !== 2) throw new Error(`Expected 2 successful attempts, got ${epStat.successfulAttempts}`);
     if (epStat.failedAttempts !== 3) throw new Error(`Expected 3 failed attempts, got ${epStat.failedAttempts}`);
+    if (epStat.health !== 'unhealthy') throw new Error(`Expected endpoint health 'unhealthy' for 40% success rate, got ${epStat.health}`);
     console.log(`[PASS] Endpoint health metrics verified: health=${epStat.health}, successRate=${epStat.successRate}%, avgLatency=${epStat.averageLatencyMs}ms`);
 
     // 7. Workspace Isolation check

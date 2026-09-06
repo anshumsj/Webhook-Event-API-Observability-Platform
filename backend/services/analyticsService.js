@@ -7,13 +7,13 @@ const HEALTH_WINDOW_HOURS = 24;
 
 const HEALTHY_SUCCESS_RATE = 99;
 const DEGRADED_SUCCESS_RATE = 80;
-const HEALTHY_LATENCY_MS = 500;
+const HEALTHY_LATENCY_MS = 1000;
 const DEGRADED_LATENCY_MS = 1000;
 
 const classifyEndpointHealth = (successRate, avgLatency, completedAttempts) => {
   if (completedAttempts === 0) return 'no_data';
   
-  if (successRate < DEGRADED_SUCCESS_RATE || avgLatency >= DEGRADED_LATENCY_MS) {
+  if (successRate < DEGRADED_SUCCESS_RATE) {
     return 'unhealthy';
   } else if (successRate >= HEALTHY_SUCCESS_RATE && avgLatency < HEALTHY_LATENCY_MS) {
     return 'healthy';
@@ -591,6 +591,7 @@ const getWorkspaceDeliveryTrends = async (workspaceId, timeRange = '24h') => {
 };
 
 module.exports = {
+  classifyEndpointHealth,
   getProjectAnalytics,
   getEndpointHealth,
   getWorkspaceAnalytics,
