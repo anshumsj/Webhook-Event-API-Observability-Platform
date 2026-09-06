@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   XCircle,
   ExternalLink,
+  Radio,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
@@ -77,25 +78,33 @@ const Home = () => {
   // Onboarding if user has no workspace yet
   if (!activeWorkspace) {
     return (
-      <div className="max-w-md mx-auto mt-12 bg-surface-1 border border-border rounded p-6 shadow-sm">
-        <div className="flex items-center gap-2 text-primary mb-3">
-          <Webhook className="w-5 h-5" />
-          <h2 className="text-sm font-semibold text-text uppercase tracking-wider font-mono">
-            Get Started with HookSight
-          </h2>
+      <div className="max-w-md mx-auto mt-12 bg-surface-1 border border-border rounded p-6 shadow-2xl">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-6 h-6 rounded bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+            <Radio className="w-3.5 h-3.5" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold text-text font-sans">
+              Initialize Workspace
+            </h2>
+            <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-surface-2 border border-border text-muted">
+              ONBOARDING
+            </span>
+          </div>
         </div>
-        <p className="text-xs text-muted mb-5 leading-relaxed">
+        <p className="text-xs text-muted mb-5 leading-relaxed font-sans">
           Create an initial workspace to configure endpoints, ingest webhooks, and start monitoring delivery telemetry.
         </p>
 
         <form onSubmit={handleCreateWorkspace} className="space-y-4">
           {error && (
-            <div className="p-2.5 bg-failure/10 border border-failure/20 text-failure text-xs rounded">
-              {error}
+            <div className="p-2.5 bg-failure/10 border border-failure/25 text-failure text-xs font-mono rounded flex items-center gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
           <div>
-            <label className="block text-xs font-mono font-medium text-muted uppercase tracking-wider mb-1.5">
+            <label className="block text-[11px] font-mono uppercase text-muted tracking-wider mb-1">
               Workspace Name
             </label>
             <Input
@@ -109,7 +118,8 @@ const Home = () => {
           <Button
             type="submit"
             variant="primary"
-            className="w-full"
+            size="md"
+            className="w-full h-8 text-xs font-medium"
             disabled={!newWorkspaceName.trim()}
           >
             Create Workspace

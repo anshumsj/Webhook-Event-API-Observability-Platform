@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api';
-import { getErrorMessage } from '../utils/errorHandler';
 
 const AuthContext = createContext();
 

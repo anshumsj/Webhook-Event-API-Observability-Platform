@@ -6,6 +6,7 @@ import Projects from '../pages/Projects';
 import Endpoints from '../pages/Endpoints';
 import Events from '../pages/Events';
 import EventDetails from '../pages/EventDetails';
+import Settings from '../pages/Settings';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { SocketProvider } from '../context/SocketContext';
@@ -35,6 +36,7 @@ const AppRoutes = () => {
           <Route path="/endpoints" element={<Endpoints />} />
           <Route path="/events" element={<Events />} />
           <Route path="/events/:eventId" element={<EventDetails />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
       </Routes>
     </Router>
