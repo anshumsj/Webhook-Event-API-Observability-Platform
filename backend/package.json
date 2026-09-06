@@ -8,7 +8,11 @@
     "dev": "nodemon server.js",
     "worker": "node worker.js",
     "worker:dev": "nodemon worker.js",
-    "test": "node run-all-tests.js"
+    "test": "node run-all-tests.js",
+    "mock-server": "node scripts/mock-server.js",
+    "benchmark:db": "node benchmarks/db-indexes-and-cache.benchmark.js",
+    "benchmark:rate-limit": "node benchmarks/rate-limiting.benchmark.js",
+    "diagnose:redis": "node scripts/diagnose-redis.js"
   },
   "dependencies": {
     "axios": "^1.20.0",
