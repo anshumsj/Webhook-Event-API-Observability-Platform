@@ -21,12 +21,38 @@ const ingestWebhook = async (req, res) => {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Associated project not found or deleted', requestId: req ? req.requestId : 'unknown' } });
     }
 
+    // 1.8 Validate payload: must be a non-null, non-empty object or array
+    const isObject = req.body && typeof req.body === 'object' && !Array.isArray(req.body);
+    const isArray = Array.isArray(req.body);
+    const isEmpty = !req.body || (typeof req.body !== 'object') || (isObject && Object.keys(req.body).length === 0) || (isArray && req.body.length === 0);
+
+    if (isEmpty) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Webhook payload is required and must be non-empty JSON', requestId: req ? req.requestId : 'unknown' } });
+    }
+
     // 2. Extract event type from common webhook provider headers
-    const eventType =
+    let eventType =
       req.headers['x-github-event'] ||
       req.headers['x-event-type']   ||
-      req.body?.type                 ||
+      (typeof req.body?.type === 'string' ? req.body.type : null) ||
       'webhook.received';
+    if (typeof eventType !== 'string') {
+      eventType = String(eventType);
+    }
+
+    // 2.5 Sanitize headers for Mongoose Map of String (converts array headers to comma-separated strings)
+    const sanitizedHeaders = {};
+    if (req.headers && typeof req.headers === 'object') {
+      for (const [key, val] of Object.entries(req.headers)) {
+        if (Array.isArray(val)) {
+          sanitizedHeaders[key] = val.join(', ');
+        } else if (typeof val === 'string') {
+          sanitizedHeaders[key] = val;
+        } else if (val != null) {
+          sanitizedHeaders[key] = String(val);
+        }
+      }
+    }
 
     // 3. Persist the raw event immediately — status starts as 'received'
     const event = new WebhookEvent({
@@ -34,7 +60,7 @@ const ingestWebhook = async (req, res) => {
       endpointId: endpoint._id,
       requestId:  req.requestId,
       payload:    req.body,
-      headers:    req.headers,
+      headers:    sanitizedHeaders,
       status:     'received',
       eventType,
     });
@@ -72,28 +98,37 @@ const ingestWebhook = async (req, res) => {
                             ? event.receivedAt.toISOString()
                             : event.receivedAt,
         processingTimeMs: ingestTimeMs,
+      }, {
+        jobId: event.eventId
       });
 
-      // Update MongoDB status to 'queued'
-      await WebhookEvent.findOneAndUpdate({ eventId: event.eventId }, { status: 'queued' });
+      // Update MongoDB status to 'queued' only if still 'received'
+      // (prevents race condition if fast worker already transitioned to 'processing' or 'processed')
+      const queuedDoc = await WebhookEvent.findOneAndUpdate(
+        { eventId: event.eventId, status: 'received' },
+        { status: 'queued' },
+        { new: true }
+      );
 
-      // Notify dashboard: received → queued
-      try {
-        const io = require('../socket').getIO();
-        io.to(`project:${event.projectId}`).emit('webhook:event:updated', {
-          _id:             String(event._id),
-          eventId:         event.eventId,
-          projectId:       String(event.projectId),
-          eventType:       event.eventType,
-          status:          'queued',
-          receivedAt:      event.receivedAt instanceof Date
-                             ? event.receivedAt.toISOString()
-                             : event.receivedAt,
-          processedAt:     null,
-          processingTimeMs: 0,
-        });
-      } catch (socketError) {
-        console.error(`[${req.requestId}] Socket emit (queued) failed:`, socketError.message);
+      // Notify dashboard: received → queued only if we actually transitioned it
+      if (queuedDoc) {
+        try {
+          const io = require('../socket').getIO();
+          io.to(`project:${event.projectId}`).emit('webhook:event:updated', {
+            _id:             String(event._id),
+            eventId:         event.eventId,
+            projectId:       String(event.projectId),
+            eventType:       event.eventType,
+            status:          'queued',
+            receivedAt:      event.receivedAt instanceof Date
+                               ? event.receivedAt.toISOString()
+                               : event.receivedAt,
+            processedAt:     null,
+            processingTimeMs: 0,
+          });
+        } catch (socketError) {
+          console.error(`[${req.requestId}] Socket emit (queued) failed:`, socketError.message);
+        }
       }
 
       console.log(`[${req.requestId}] Enqueued | eventId: ${event.eventId}`);
@@ -101,7 +136,10 @@ const ingestWebhook = async (req, res) => {
       console.error(`[${req.requestId}] Failed to enqueue job:`, queueError.message);
       
       // Update MongoDB status to 'failed' so it isn't orphaned as 'received'
-      await WebhookEvent.findOneAndUpdate({ eventId: event.eventId }, { status: 'failed' });
+      await WebhookEvent.findOneAndUpdate(
+        { eventId: event.eventId, status: 'received' },
+        { status: 'failed' }
+      );
       
       return res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'We couldn\'t process your webhook at this time. Please try again.', requestId: req ? req.requestId : 'unknown' } });
     }
