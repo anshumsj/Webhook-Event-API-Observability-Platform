@@ -147,6 +147,32 @@ async function runSecurityTests() {
       console.log('[PASS] JWT fail-closed behavior verified.');
     }
 
+    // 8. API Key ObjectId Validation (Commit 59 Hardening)
+    try {
+      await api.post('/auth/api-keys', {
+        name: 'Invalid WS Key',
+        workspaceId: 'invalid-workspace-id-format'
+      });
+      throw new Error('Expected 400 when creating API key with malformed workspaceId');
+    } catch (err) {
+      if (err.response && err.response.status === 400 && err.response.data.error.code === 'BAD_REQUEST') {
+        console.log('[PASS] API key creation rejects malformed workspaceId with 400 BAD_REQUEST.');
+      } else {
+        throw new Error(`Expected 400 BAD_REQUEST for malformed workspaceId, got: ${err.response?.status || err.message}`);
+      }
+    }
+
+    try {
+      await api.delete('/auth/api-keys/invalid-api-key-id-format');
+      throw new Error('Expected 400 when revoking API key with malformed id');
+    } catch (err) {
+      if (err.response && err.response.status === 400 && err.response.data.error.code === 'BAD_REQUEST') {
+        console.log('[PASS] API key revocation rejects malformed id with 400 BAD_REQUEST.');
+      } else {
+        throw new Error(`Expected 400 BAD_REQUEST for malformed API key ID, got: ${err.response?.status || err.message}`);
+      }
+    }
+
     console.log('\n🌟 Security, SSRF, Signing & Redaction Tests passed successfully!\n');
   } catch (err) {
     console.error('\n❌ Security test failed:', err.message);

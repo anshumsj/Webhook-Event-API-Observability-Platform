@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const apiKeyController = require('../controllers/apiKeyController');
 const { protect } = require('../middleware/authMiddleware');
+const validateObjectId = require('../middleware/validateObjectId');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const { RedisStore } = require('rate-limit-redis');
 const { getRedis } = require('../config/redis');
@@ -36,6 +37,6 @@ router.get('/', protect, apiKeyController.listApiKeys);
 // @route   DELETE /api/auth/api-keys/:id
 // @desc    Revoke an API key
 // @access  Private (JWT only)
-router.delete('/:id', protect, apiKeyController.revokeApiKey);
+router.delete('/:id', protect, validateObjectId('id'), apiKeyController.revokeApiKey);
 
 module.exports = router;

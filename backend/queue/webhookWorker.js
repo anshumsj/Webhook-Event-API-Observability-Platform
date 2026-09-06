@@ -52,7 +52,7 @@ const buildProcessor = (emitFn) => async (job) => {
     processingDoc = await WebhookEvent.findOneAndUpdate(
       { eventId },
       { status: 'processing' },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!processingDoc) {
       console.warn(`[Worker] ⚠  Event not found, skipping: ${eventId}`);
@@ -171,7 +171,7 @@ const buildProcessor = (emitFn) => async (job) => {
             const retryDoc = await WebhookEvent.findByIdAndUpdate(
               processingDoc._id,
               { status: 'retrying' },
-              { new: true }
+              { returnDocument: 'after' }
             );
             if (typeof emitFn === 'function' && retryDoc) {
               emitFn(`project:${projectId}`, 'webhook:event:updated', buildSocketPayload(retryDoc));
@@ -187,7 +187,7 @@ const buildProcessor = (emitFn) => async (job) => {
         const retryDoc = await WebhookEvent.findByIdAndUpdate(
           processingDoc._id,
           { status: 'retrying' },
-          { new: true }
+          { returnDocument: 'after' }
         );
         if (typeof emitFn === 'function' && retryDoc) {
           emitFn(`project:${projectId}`, 'webhook:event:updated', buildSocketPayload(retryDoc));
@@ -204,7 +204,7 @@ const buildProcessor = (emitFn) => async (job) => {
     const finalDoc = await WebhookEvent.findOneAndUpdate(
       { eventId },
       { status: statusToSet, processedAt: new Date(), processingTimeMs: totalMs },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     console.log(`[Worker] ${statusToSet === 'processed' ? '✓ Processed' : '❌ Failed (No Destination)'} | eventId: ${eventId} | ${totalMs}ms`);
@@ -244,7 +244,7 @@ const startWorker = (emitFn = null) => {
         const failedDoc = await WebhookEvent.findOneAndUpdate(
           { eventId: job.data.eventId },
           { status: 'retry_exhausted', processedAt: new Date() },
-          { new: true }
+          { returnDocument: 'after' }
         );
         if (failedDoc && typeof emitFn === 'function') {
           emitFn(

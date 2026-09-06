@@ -1,5 +1,6 @@
 const ApiKey = require('../models/ApiKey');
 const Workspace = require('../models/Workspace');
+const mongoose = require('mongoose');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 
@@ -13,6 +14,10 @@ const generateApiKey = async (req, res) => {
     }
     if (!workspaceId) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'workspaceId is required', requestId: req.requestId } });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(workspaceId)) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid workspace ID format', requestId: req.requestId } });
     }
 
     const userId = req.user.id;
@@ -78,6 +83,10 @@ const revokeApiKey = async (req, res) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid id format', requestId: req ? req.requestId : 'unknown' } });
+    }
 
     const apiKey = await ApiKey.findOne({ _id: id, userId });
     if (!apiKey) {

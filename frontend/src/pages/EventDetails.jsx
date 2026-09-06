@@ -79,7 +79,7 @@ export default function EventDetails() {
       replayTimeout1Ref.current = setTimeout(() => fetchEventDetails(), 1000);
       replayTimeout2Ref.current = setTimeout(() => fetchEventDetails(), 3000);
     } catch (err) {
-      setReplayError(err.response?.data?.message || 'Failed to queue replay');
+      setReplayError(getErrorMessage(err, 'Failed to queue replay'));
     } finally {
       setReplaying(false);
     }
