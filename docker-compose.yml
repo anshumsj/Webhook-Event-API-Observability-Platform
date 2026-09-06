@@ -35,7 +35,7 @@ services:
     ports:
       - "3001:3001"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - PORT=3001
       - MONGODB_URI=mongodb://mongodb:27017/webhookObservability
       - REDIS_URL=redis://redis:6379
