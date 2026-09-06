@@ -5,8 +5,6 @@ import { CheckCircle2, XCircle, Loader2, Clock } from 'lucide-react';
 export default function LifecycleTimeline({ event }) {
   const ORDER = ['received', 'queued', 'processing', 'processed'];
   const currentIdx = ORDER.indexOf(event.status);
-  // 'failed' counts as after 'processing'
-  const failedIdx = event.status === 'failed' ? 3 : -1;
 
   const steps = [
     { key: 'received',   label: 'Received',   time: event.receivedAt },
@@ -16,51 +14,66 @@ export default function LifecycleTimeline({ event }) {
   ];
 
   return (
-    <div className="relative">
-      <div className="absolute left-[15px] top-4 bottom-4 w-px bg-border"></div>
-      <div className="space-y-6 relative z-10">
+    <div className="relative pl-1">
+      {/* Vertical connection spine */}
+      <div className="absolute left-[13px] top-3 bottom-3 w-px bg-border" />
+
+      <div className="space-y-4 relative z-10">
         {steps.map((step, idx) => {
           const isCurrent = event.status === step.key;
           const isDone = currentIdx > idx || (event.status === 'processed' && step.key === 'processed');
           const isFailed = event.status === 'failed' && step.key === 'processed';
-          const isPending = !isDone && !isCurrent && !isFailed;
 
-          let dotClass, icon;
+          let dotClass;
+          let icon;
+
           if (isFailed) {
-            dotClass = 'bg-rose-400/20 border border-rose-400/30';
-            icon = <XCircle className="w-4 h-4 text-rose-400" />;
+            dotClass = 'bg-failure/15 border border-failure/30 text-failure';
+            icon = <XCircle className="w-3 h-3 text-failure" />;
           } else if (isDone) {
-            dotClass = 'bg-emerald-400/20 border border-emerald-400/30';
-            icon = <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
+            dotClass = 'bg-success/15 border border-success/30 text-success';
+            icon = <CheckCircle2 className="w-3 h-3 text-success" />;
           } else if (isCurrent && step.key === 'processing') {
-            dotClass = 'bg-violet-400/20 border border-violet-400/30';
-            icon = <Loader2 className="w-4 h-4 text-violet-400 animate-spin" />;
+            dotClass = 'bg-inflight/15 border border-inflight/30 text-inflight';
+            icon = <Loader2 className="w-3 h-3 animate-spin text-inflight" />;
           } else if (isCurrent && step.key === 'queued') {
-            dotClass = 'bg-sky-400/20 border border-sky-400/30';
-            icon = <Clock className="w-4 h-4 text-sky-400" />;
+            dotClass = 'bg-info/15 border border-info/30 text-info';
+            icon = <Clock className="w-3 h-3 text-info" />;
           } else if (isCurrent) {
-            dotClass = 'bg-amber-400/20 border border-amber-400/30';
-            icon = <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />;
+            dotClass = 'bg-warning/15 border border-warning/30 text-warning';
+            icon = <Loader2 className="w-3 h-3 animate-spin text-warning" />;
           } else {
-            dotClass = 'bg-surface border border-border';
-            icon = <div className="w-2 h-2 rounded-full bg-muted"></div>;
+            dotClass = 'bg-surface-2 border border-border text-muted/40';
+            icon = <div className="w-1.5 h-1.5 rounded-full bg-muted/40" />;
           }
 
           return (
-            <div key={step.key} className="flex items-start gap-4">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${dotClass}`}>
+            <div key={step.key} className="flex items-start gap-3">
+              <div
+                className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${dotClass}`}
+                aria-hidden="true"
+              >
                 {icon}
               </div>
-              <div>
-                <p className={`text-sm font-medium ${
-                  isFailed ? 'text-rose-400' :
-                  isDone || isCurrent ? 'text-text' : 'text-muted'
-                }`}>{step.label}</p>
-                {step.time && (
-                  <p className="text-xs text-muted">
-                    {format(new Date(step.time), 'HH:mm:ss.SSS')}
+              <div className="min-w-0 flex-1 pt-0.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p
+                    className={`text-xs font-medium leading-none ${
+                      isFailed
+                        ? 'text-failure'
+                        : isDone || isCurrent
+                        ? 'text-text'
+                        : 'text-muted'
+                    }`}
+                  >
+                    {step.label}
                   </p>
-                )}
+                  {step.time && (
+                    <span className="font-mono text-[10px] text-muted leading-none">
+                      {format(new Date(step.time), 'HH:mm:ss.SSS')}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           );

@@ -1,13 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import { useSocket } from '../context/SocketContext';
-import { ArrowLeft, Clock, CheckCircle2, XCircle, Loader2, Database, Braces, AlignLeft, Box, Activity } from 'lucide-react';
+import {
+  ArrowLeft,
+  Clock,
+  XCircle,
+  Loader2,
+  Braces,
+  AlignLeft,
+  Activity,
+  RotateCcw,
+  Layers,
+  Info,
+} from 'lucide-react';
 import { format } from 'date-fns';
-import { RotateCcw } from 'lucide-react';
 import AttemptTimeline from '../components/AttemptTimeline';
 import LifecycleTimeline from '../components/LifecycleTimeline';
-import EventStatusBadge from '../components/EventStatusBadge';
+import StatusBadge from '../components/ui/StatusBadge';
+import Button from '../components/ui/Button';
+import ClipboardCopy from '../components/ClipboardCopy';
 import { getErrorMessage } from '../utils/errorHandler';
 
 export default function EventDetails() {
@@ -15,12 +27,25 @@ export default function EventDetails() {
   const navigate = useNavigate();
   const location = useLocation();
   const { socket } = useSocket();
+
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [replaying, setReplaying] = useState(false);
   const [replayError, setReplayError] = useState(null);
   const [replaySuccess, setReplaySuccess] = useState(null);
+  const [activeInspectorTab, setActiveInspectorTab] = useState('payload'); // 'payload' | 'headers'
+
+  // Timeout refs for cleanup
+  const replayTimeout1Ref = useRef(null);
+  const replayTimeout2Ref = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (replayTimeout1Ref.current) clearTimeout(replayTimeout1Ref.current);
+      if (replayTimeout2Ref.current) clearTimeout(replayTimeout2Ref.current);
+    };
+  }, []);
 
   const fetchEventDetails = async () => {
     try {
@@ -50,9 +75,9 @@ export default function EventDetails() {
     try {
       await api.post(`/events/${eventId}/replay`);
       setReplaySuccess('Replay successfully queued');
-      // Wait a moment for worker to process, then refresh to show new attempt
-      setTimeout(() => fetchEventDetails(), 1000);
-      setTimeout(() => fetchEventDetails(), 3000); // Poll again
+      // Wait for worker to process, then refresh to show new attempt
+      replayTimeout1Ref.current = setTimeout(() => fetchEventDetails(), 1000);
+      replayTimeout2Ref.current = setTimeout(() => fetchEventDetails(), 3000);
     } catch (err) {
       setReplayError(err.response?.data?.message || 'Failed to queue replay');
     } finally {
@@ -60,8 +85,7 @@ export default function EventDetails() {
     }
   };
 
-  // Listen for the worker's 'processed' update — patch status/timing in-place.
-  // Join the project room once the event is loaded so we receive targeted updates.
+  // Real-time worker update reconciliation
   useEffect(() => {
     if (!socket || !event) return;
 
@@ -70,11 +94,11 @@ export default function EventDetails() {
 
     const handleEventUpdate = (updatedEvent) => {
       if (updatedEvent.eventId !== eventId) return;
-      setEvent(prev => ({
+      setEvent((prev) => ({
         ...prev,
-        status:           updatedEvent.status,
+        status: updatedEvent.status,
         processingTimeMs: updatedEvent.processingTimeMs,
-        processedAt:      updatedEvent.processedAt || prev.processedAt,
+        processedAt: updatedEvent.processedAt || prev.processedAt,
       }));
     };
 
@@ -87,63 +111,56 @@ export default function EventDetails() {
 
   if (loading) {
     return (
-      <div className="animate-pulse space-y-6">
-        <div className="h-8 w-1/4 bg-surface/50 border border-border rounded-lg"></div>
-        <div className="h-64 bg-surface/50 border border-border rounded-xl"></div>
+      <div className="space-y-4">
+        <div className="h-9 w-48 bg-surface-1 border border-border rounded animate-pulse" />
+        <div className="h-20 bg-surface-1 border border-border rounded animate-pulse" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 space-y-4">
+            <div className="h-64 bg-surface-1 border border-border rounded animate-pulse" />
+            <div className="h-64 bg-surface-1 border border-border rounded animate-pulse" />
+          </div>
+          <div className="h-80 bg-surface-1 border border-border rounded animate-pulse" />
+        </div>
       </div>
     );
   }
 
   if (error || !event) {
     return (
-      <div className="space-y-6 max-w-3xl mx-auto mt-12 text-center">
-        <div className="bg-surface border border-border p-8 rounded-xl shadow-sm flex flex-col items-center">
-          <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
-            <XCircle className="w-8 h-8 text-red-400" />
+      <div className="max-w-2xl mx-auto mt-12 text-center">
+        <div className="bg-surface-1 border border-border p-8 rounded flex flex-col items-center">
+          <div className="w-10 h-10 bg-failure/10 border border-failure/20 rounded-full flex items-center justify-center mb-3">
+            <XCircle className="w-5 h-5 text-failure" />
           </div>
-          <h2 className="text-xl font-bold text-text mb-2">Event Not Found</h2>
-          <p className="text-muted mb-6">
-            {error || "We couldn't find this event. It may have been deleted, or you don't have permission to view it."}
+          <h2 className="text-base font-semibold text-text mb-1">Event Not Found</h2>
+          <p className="text-xs text-muted max-w-md mb-5">
+            {error ||
+              "We couldn't locate this event. It may have been pruned, or you lack authorization for this project."}
           </p>
-          <button 
-            onClick={handleBack}
-            className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-primary/90 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Events
-          </button>
+          <Button variant="secondary" size="sm" onClick={handleBack}>
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Return to Events</span>
+          </Button>
         </div>
       </div>
     );
   }
 
-  // Render payload safely
-  const renderPayload = () => {
-    let payloadString = '';
-    if (typeof event.payload === 'object' && event.payload !== null) {
-      payloadString = JSON.stringify(event.payload, null, 2);
-    } else {
-      payloadString = String(event.payload);
-    }
-
-    return (
-      <pre className="text-sm font-mono text-muted bg-background p-4 rounded-lg border border-border whitespace-pre-wrap break-all">
-        {payloadString}
-      </pre>
-    );
-  };
-
-  // Derived Metrics
+  // Derived Telemetry
   const totalAttempts = event.attempts?.length || 0;
   const retries = Math.max(0, totalAttempts - 1);
-  
+
   let finalStatusDisplay = 'Pending';
   if (event.status === 'processed') finalStatusDisplay = 'Delivered';
   else if (event.status === 'failed') finalStatusDisplay = 'Failed';
   else if (event.status === 'retry_exhausted') finalStatusDisplay = 'Dead Lettered';
-  
+
   let totalDurationDisplay = 'In Progress';
-  if (event.status === 'processed' || event.status === 'failed' || event.status === 'retry_exhausted') {
+  if (
+    event.status === 'processed' ||
+    event.status === 'failed' ||
+    event.status === 'retry_exhausted'
+  ) {
     if (event.processingTimeMs != null && !isNaN(event.processingTimeMs)) {
       const ms = event.processingTimeMs;
       if (ms < 1000) totalDurationDisplay = `${ms} ms`;
@@ -153,182 +170,355 @@ export default function EventDetails() {
     }
   }
 
+  const payloadString =
+    typeof event.payload === 'object' && event.payload !== null
+      ? JSON.stringify(event.payload, null, 2)
+      : String(event.payload || '');
+
+  const headersString =
+    event.headers && typeof event.headers === 'object'
+      ? JSON.stringify(event.headers, null, 2)
+      : '{}';
+
   return (
-    <div className="space-y-6 max-w-5xl">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <button 
-          onClick={handleBack}
-          className="p-2 bg-surface border border-border rounded-lg text-muted hover:text-text hover:bg-white/5 transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-text flex items-center gap-3">
-            Event Details
-            <EventStatusBadge status={event.status} size="lg" />
-          </h1>
-          <p className="text-muted mt-1 font-mono text-sm">{event.eventId}</p>
+    <div className="space-y-4 max-w-6xl">
+      {/* 1. Header Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface-1 border border-border p-3 rounded">
+        {/* Left: Navigation & Core Identifiers */}
+        <div className="flex items-center gap-3 min-w-0">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleBack}
+            className="shrink-0"
+            title="Back to Event Explorer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Events</span>
+          </Button>
+
+          <div className="h-4 w-px bg-border shrink-0" />
+
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            <span className="font-mono text-sm font-semibold text-text select-all tracking-tight truncate">
+              {event.eventId}
+            </span>
+            <ClipboardCopy text={event.eventId} label="Copy ID" />
+
+            <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-surface-2 border border-border text-muted uppercase shrink-0">
+              POST
+            </span>
+
+            <span
+              className="text-xs font-mono text-text bg-surface-2 border border-border px-2 py-0.5 rounded truncate max-w-[200px]"
+              title={event.eventType}
+            >
+              {event.eventType}
+            </span>
+
+            <StatusBadge status={event.status} size="md" />
+          </div>
         </div>
-        
+
+        {/* Right: Replay Action */}
         {['processed', 'failed', 'retry_exhausted'].includes(event.status) && (
-          <div className="ml-auto flex items-center gap-3">
-            {replayError && <span className="text-sm text-rose-400">{replayError}</span>}
-            {replaySuccess && <span className="text-sm text-emerald-400">{replaySuccess}</span>}
-            <button
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            {replayError && (
+              <span className="text-xs font-mono text-failure max-w-xs truncate" title={replayError}>
+                {replayError}
+              </span>
+            )}
+            {replaySuccess && (
+              <span className="text-xs font-mono text-success">{replaySuccess}</span>
+            )}
+
+            <Button
+              variant="primary"
+              size="sm"
               onClick={handleReplay}
               disabled={replaying}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                replaying 
-                  ? 'bg-primary/50 text-white/70 cursor-not-allowed' 
-                  : 'bg-primary text-white hover:bg-primary/90'
-              }`}
+              title="Dispatch manual webhook replay"
             >
-              {replaying ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-              {replaying ? 'Queuing...' : 'Replay Event'}
-            </button>
+              {replaying ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="w-3.5 h-3.5" />
+              )}
+              <span>{replaying ? 'Queuing...' : 'Replay Event'}</span>
+            </Button>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column (Main Data) */}
-        <div className="lg:col-span-2 space-y-6">
-
-          {/* Delivery Summary Block */}
-          {event.attempts && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-               <div className="bg-surface border border-border rounded-xl p-4 shadow-sm">
-                 <p className="text-xs text-muted uppercase font-semibold mb-1">Total Attempts</p>
-                 <p className="text-xl font-bold text-text">{totalAttempts}</p>
-               </div>
-               <div className="bg-surface border border-border rounded-xl p-4 shadow-sm">
-                 <p className="text-xs text-muted uppercase font-semibold mb-1">Retries</p>
-                 <p className="text-xl font-bold text-text">{retries}</p>
-               </div>
-               <div className="bg-surface border border-border rounded-xl p-4 shadow-sm">
-                 <p className="text-xs text-muted uppercase font-semibold mb-1">Final Status</p>
-                 <p className={`text-base font-bold ${
-                    finalStatusDisplay === 'Delivered' ? 'text-emerald-400' :
-                    finalStatusDisplay === 'Dead Lettered' ? 'text-rose-400' :
-                    finalStatusDisplay === 'Failed' ? 'text-rose-400' :
-                    'text-amber-400'
-                 }`}>{finalStatusDisplay}</p>
-               </div>
-               <div className="bg-surface border border-border rounded-xl p-4 shadow-sm">
-                 <p className="text-xs text-muted uppercase font-semibold mb-1">Total Duration</p>
-                 <p className="text-xl font-bold text-text">{totalDurationDisplay}</p>
-               </div>
-            </div>
-          )}
-
-          {/* Payload Section */}
-          <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
-            <div className="px-6 py-4 border-b border-border flex items-center gap-2">
-              <Braces className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold text-text">Payload</h3>
-            </div>
-            <div className="p-6 overflow-x-auto">
-              {renderPayload()}
-            </div>
-          </div>
-
-          {/* Headers Section */}
-          <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
-            <div className="px-6 py-4 border-b border-border flex items-center gap-2">
-              <AlignLeft className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold text-text">Headers</h3>
-            </div>
-            <div className="p-6">
-              <div className="space-y-2">
-                {event.headers && Object.keys(event.headers).map((key) => {
-                  const val = event.headers[key];
-                  const displayVal = typeof val === 'object' ? JSON.stringify(val) : String(val);
-                  return (
-                    <div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 border-b border-white/5 pb-2 last:border-0 last:pb-0">
-                      <span className="font-mono text-xs text-text min-w-[200px]">{key}</span>
-                      <span className="font-mono text-xs text-muted break-all">{displayVal}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Delivery Attempts Timeline */}
-          {event.attempts && event.attempts.length > 0 && (
-            <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
-              <div className="px-6 py-4 border-b border-border flex items-center gap-2">
-                <Activity className="w-5 h-5 text-primary" />
-                <h3 className="font-semibold text-text">Delivery Attempts</h3>
-              </div>
-              <div className="p-6 relative">
-                <AttemptTimeline attempts={event.attempts} eventStatus={event.status} eventPayload={event.payload} />
-              </div>
-            </div>
-          )}
-          
-          {event.attempts && event.attempts.length === 0 && (
-            <div className="bg-surface border border-border rounded-xl p-8 text-center shadow-sm">
-               <Clock className="w-8 h-8 text-muted mx-auto mb-3" />
-               <h3 className="text-text font-semibold mb-1">No Delivery Attempts Yet</h3>
-               <p className="text-sm text-muted">This event is waiting to be processed or is currently in the queue.</p>
-            </div>
-          )}
+      {/* 2. Telemetry Ribbon */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        {/* Total Attempts */}
+        <div className="bg-surface-1 border border-border rounded p-2.5">
+          <span className="text-[10px] font-mono text-muted uppercase tracking-wider block mb-0.5">
+            Attempts
+          </span>
+          <span className="text-sm font-mono font-semibold text-text">{totalAttempts}</span>
         </div>
 
-        {/* Right Column (Metadata & Timeline) */}
-        <div className="space-y-6">
-          {/* Metadata */}
-          <div className="bg-surface border border-border rounded-xl shadow-sm">
-            <div className="px-6 py-4 border-b border-border flex items-center gap-2">
-              <Database className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold text-text">Metadata</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold mb-1">Event Type</p>
-                <span className="bg-primary/10 text-primary border border-primary/20 px-2.5 py-1 rounded-md font-mono text-xs">
-                  {event.eventType}
+        {/* Retries */}
+        <div className="bg-surface-1 border border-border rounded p-2.5">
+          <span className="text-[10px] font-mono text-muted uppercase tracking-wider block mb-0.5">
+            Retries
+          </span>
+          <span className="text-sm font-mono font-semibold text-text">{retries}</span>
+        </div>
+
+        {/* Final Status */}
+        <div className="bg-surface-1 border border-border rounded p-2.5">
+          <span className="text-[10px] font-mono text-muted uppercase tracking-wider block mb-0.5">
+            Final Outcome
+          </span>
+          <span
+            className={`text-sm font-mono font-semibold ${
+              finalStatusDisplay === 'Delivered'
+                ? 'text-success'
+                : finalStatusDisplay === 'Dead Lettered' || finalStatusDisplay === 'Failed'
+                ? 'text-failure'
+                : 'text-warning'
+            }`}
+          >
+            {finalStatusDisplay}
+          </span>
+        </div>
+
+        {/* Total Duration */}
+        <div className="bg-surface-1 border border-border rounded p-2.5">
+          <span className="text-[10px] font-mono text-muted uppercase tracking-wider block mb-0.5">
+            Duration
+          </span>
+          <span className="text-sm font-mono font-semibold text-text">
+            {totalDurationDisplay}
+          </span>
+        </div>
+
+        {/* Request ID */}
+        <div className="bg-surface-1 border border-border rounded p-2.5 min-w-0">
+          <div className="flex items-center justify-between mb-0.5">
+            <span className="text-[10px] font-mono text-muted uppercase tracking-wider">
+              Request ID
+            </span>
+            {event.requestId && (
+              <ClipboardCopy text={event.requestId} label="Copy" className="px-1 py-0 text-[10px]" />
+            )}
+          </div>
+          <span
+            className="text-xs font-mono text-text block truncate"
+            title={event.requestId}
+          >
+            {event.requestId || '—'}
+          </span>
+        </div>
+
+        {/* Project */}
+        <div className="bg-surface-1 border border-border rounded p-2.5 min-w-0">
+          <span className="text-[10px] font-mono text-muted uppercase tracking-wider block mb-0.5">
+            Project
+          </span>
+          <span
+            className="text-xs font-medium text-text block truncate"
+            title={event.projectName || event.projectId}
+          >
+            {event.projectName || event.projectId || '—'}
+          </span>
+        </div>
+      </div>
+
+      {/* 3. Main Workbench Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Left Column: Attempts Timeline & Inspector (lg:col-span-2) */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Delivery Attempts Section */}
+          <div className="bg-surface-1 border border-border rounded overflow-hidden">
+            <div className="px-3.5 py-2.5 border-b border-border bg-surface-2/40 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-primary" />
+                <h3 className="text-xs font-semibold text-text tracking-wide">
+                  Delivery Attempts
+                </h3>
+                <span className="font-mono text-[11px] text-muted">
+                  ({totalAttempts})
                 </span>
               </div>
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold mb-1">Timestamp</p>
-                <p className="text-sm text-text font-medium">{format(new Date(event.receivedAt), 'MMM d, yyyy HH:mm:ss.SSS')}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold mb-1">Processing Time</p>
-                <div className="flex items-center gap-1.5 text-text font-medium text-sm">
-                  <Clock className="w-4 h-4 text-muted" />
-                  <span>
-                    {event.status === 'processed' || event.status === 'failed'
-                      ? `${event.processingTimeMs} ms`
-                      : 'Pending'}
-                  </span>
+            </div>
+
+            <div className="p-3.5">
+              {event.attempts && event.attempts.length > 0 ? (
+                <AttemptTimeline
+                  attempts={event.attempts}
+                  eventStatus={event.status}
+                  eventPayload={event.payload}
+                />
+              ) : (
+                <div className="bg-canvas border border-border border-dashed rounded p-6 text-center">
+                  <Clock className="w-5 h-5 text-muted mx-auto mb-2 opacity-60" />
+                  <p className="text-xs font-medium text-text mb-0.5">
+                    Awaiting Delivery Execution
+                  </p>
+                  <p className="text-[11px] text-muted max-w-sm mx-auto">
+                    This webhook event is queued or currently being processed by the worker queue.
+                  </p>
                 </div>
-              </div>
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold mb-1">Request ID</p>
-                <p className="font-mono text-xs text-muted">{event.requestId}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold mb-1">Project</p>
-                <p className="font-medium text-sm text-text">{event.projectName || event.projectId}</p>
-              </div>
+              )}
             </div>
           </div>
 
-          {/* Timeline */}
-          <div className="bg-surface border border-border rounded-xl shadow-sm">
-            <div className="px-6 py-4 border-b border-border flex items-center gap-2">
-              <Box className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold text-text">Lifecycle</h3>
+          {/* Ingest Payload & Request Headers Workbench */}
+          <div className="bg-surface-1 border border-border rounded overflow-hidden">
+            {/* Workbench Tab Header */}
+            <div className="px-3.5 py-2 border-b border-border bg-surface-2/40 flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveInspectorTab('payload')}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono font-medium transition-colors cursor-pointer ${
+                    activeInspectorTab === 'payload'
+                      ? 'bg-surface-3 text-text border border-border'
+                      : 'text-muted hover:text-text'
+                  }`}
+                >
+                  <Braces className="w-3.5 h-3.5 text-primary" />
+                  <span>Payload</span>
+                  <span className="text-[10px] text-muted">
+                    ({new Blob([payloadString]).size} B)
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveInspectorTab('headers')}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono font-medium transition-colors cursor-pointer ${
+                    activeInspectorTab === 'headers'
+                      ? 'bg-surface-3 text-text border border-border'
+                      : 'text-muted hover:text-text'
+                  }`}
+                >
+                  <AlignLeft className="w-3.5 h-3.5 text-primary" />
+                  <span>Headers</span>
+                  <span className="text-[10px] text-muted">
+                    ({event.headers ? Object.keys(event.headers).length : 0})
+                  </span>
+                </button>
+              </div>
+
+              {/* Copy Affordance */}
+              <div>
+                {activeInspectorTab === 'payload' ? (
+                  <ClipboardCopy text={payloadString} label="Copy Payload" />
+                ) : (
+                  <ClipboardCopy text={headersString} label="Copy Headers" />
+                )}
+              </div>
             </div>
-            <div className="p-6 relative">
+
+            {/* Workbench Body */}
+            <div className="p-3.5">
+              {activeInspectorTab === 'payload' ? (
+                <div className="relative group">
+                  <pre className="text-xs font-mono text-muted bg-canvas p-3 rounded border border-border whitespace-pre-wrap break-all max-h-[380px] overflow-y-auto leading-relaxed select-all">
+                    {payloadString}
+                  </pre>
+                </div>
+              ) : (
+                <div className="bg-canvas border border-border rounded p-3 max-h-[380px] overflow-y-auto">
+                  {event.headers && Object.keys(event.headers).length > 0 ? (
+                    <div className="divide-y divide-border/40 font-mono text-xs">
+                      {Object.entries(event.headers).map(([key, val]) => (
+                        <div
+                          key={key}
+                          className="py-1.5 flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 first:pt-0 last:pb-0"
+                        >
+                          <span className="text-text font-medium min-w-[200px] shrink-0">
+                            {key}
+                          </span>
+                          <span className="text-muted break-all select-all">
+                            {typeof val === 'object' ? JSON.stringify(val) : String(val)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs font-mono text-muted italic">
+                      No request headers recorded during webhook ingest.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Lifecycle Progression & Diagnostic Metadata (lg:col-span-1) */}
+        <div className="space-y-4">
+          {/* Lifecycle Progression */}
+          <div className="bg-surface-1 border border-border rounded overflow-hidden">
+            <div className="px-3.5 py-2.5 border-b border-border bg-surface-2/40 flex items-center gap-2">
+              <Layers className="w-4 h-4 text-primary" />
+              <h3 className="text-xs font-semibold text-text tracking-wide">
+                Ingest Lifecycle
+              </h3>
+            </div>
+            <div className="p-3.5">
               <LifecycleTimeline event={event} />
             </div>
           </div>
-          
+
+          {/* Diagnostic Metadata */}
+          <div className="bg-surface-1 border border-border rounded overflow-hidden">
+            <div className="px-3.5 py-2.5 border-b border-border bg-surface-2/40 flex items-center gap-2">
+              <Info className="w-4 h-4 text-primary" />
+              <h3 className="text-xs font-semibold text-text tracking-wide">
+                Diagnostic Telemetry
+              </h3>
+            </div>
+            <div className="p-3.5 space-y-3 font-mono text-xs">
+              <div>
+                <span className="text-[10px] uppercase text-muted tracking-wider block mb-0.5">
+                  Received Timestamp
+                </span>
+                <span className="text-text">
+                  {event.receivedAt
+                    ? format(new Date(event.receivedAt), 'MMM d, yyyy HH:mm:ss.SSS')
+                    : '—'}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-[10px] uppercase text-muted tracking-wider block mb-0.5">
+                  Processed Timestamp
+                </span>
+                <span className="text-text">
+                  {event.processedAt
+                    ? format(new Date(event.processedAt), 'MMM d, yyyy HH:mm:ss.SSS')
+                    : '— (Pending)'}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-[10px] uppercase text-muted tracking-wider block mb-0.5">
+                  Worker Execution Latency
+                </span>
+                <span className="text-text">
+                  {event.processingTimeMs != null ? `${event.processingTimeMs} ms` : '—'}
+                </span>
+              </div>
+
+              {event.endpointId && (
+                <div>
+                  <span className="text-[10px] uppercase text-muted tracking-wider block mb-0.5">
+                    Endpoint Binding
+                  </span>
+                  <span className="text-text truncate block select-all" title={String(event.endpointId)}>
+                    {String(event.endpointId)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
