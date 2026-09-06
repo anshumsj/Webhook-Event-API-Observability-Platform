@@ -10,6 +10,11 @@ const createProject = async (req, res) => {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Project name and workspace ID are required', requestId: req ? req.requestId : 'unknown' } });
     }
 
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(workspaceId)) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid workspace ID format', requestId: req ? req.requestId : 'unknown' } });
+    }
+
     if (req.user.apiKeyWorkspaceId && req.user.apiKeyWorkspaceId !== workspaceId.toString()) {
       return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'API key is not authorized for this workspace', requestId: req ? req.requestId : 'unknown' } });
     }

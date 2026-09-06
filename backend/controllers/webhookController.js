@@ -15,6 +15,12 @@ const ingestWebhook = async (req, res) => {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Webhook endpoint not found', requestId: req ? req.requestId : 'unknown' } });
     }
 
+    // 1.5 Validate associated project
+    const project = await Project.findById(endpoint.projectId);
+    if (!project) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Associated project not found or deleted', requestId: req ? req.requestId : 'unknown' } });
+    }
+
     // 2. Extract event type from common webhook provider headers
     const eventType =
       req.headers['x-github-event'] ||
