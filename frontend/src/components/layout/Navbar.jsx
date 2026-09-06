@@ -8,13 +8,13 @@ export default function Navbar() {
   const { isConnected } = useSocket();
   
   return (
-    <header className="h-16 bg-surface/50 backdrop-blur-md border-b border-border flex items-center justify-between px-6 sticky top-0 z-10">
-      <div className="flex items-center bg-background border border-border rounded-lg px-3 py-1.5 w-64 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/50 transition-all">
+    <header className="h-14 bg-background/95 backdrop-blur border-b border-border/40 flex items-center justify-between px-6 sticky top-0 z-10">
+      <div className="flex items-center bg-surface/30 border border-border/40 rounded-md px-3 py-1.5 w-64 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
         <Search className="w-4 h-4 text-muted mr-2" />
         <input 
           type="text" 
           placeholder="Search..." 
-          className="bg-transparent border-none outline-none text-sm text-text w-full placeholder-muted"
+          className="bg-transparent border-none outline-none text-sm text-text w-full placeholder-muted/70"
         />
       </div>
 

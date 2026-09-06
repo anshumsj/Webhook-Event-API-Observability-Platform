@@ -115,223 +115,217 @@ const Home = () => {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-surface border border-border rounded-xl p-6">
-              <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center text-primary mb-4">
-                <FolderKanban className="w-6 h-6" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Link to="/projects" className="group bg-surface/20 border border-border/40 hover:border-border/80 rounded-lg p-5 transition-all flex items-start gap-4">
+              <div className="w-10 h-10 rounded-md bg-white/5 border border-white/10 flex items-center justify-center text-primary group-hover:bg-primary/10 transition-colors">
+                <FolderKanban className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-medium text-text">Projects</h3>
-              <p className="text-muted text-sm mt-1 mb-4">Manage your webhook integrations</p>
-              <Link to="/projects" className="text-primary hover:underline text-sm font-medium">View Projects &rarr;</Link>
-            </div>
+              <div>
+                <h3 className="text-sm font-semibold text-text group-hover:text-primary transition-colors">Projects</h3>
+                <p className="text-muted text-xs mt-1">Manage webhook integrations</p>
+              </div>
+            </Link>
 
-            <div className="bg-surface border border-border rounded-xl p-6">
-              <div className="w-12 h-12 bg-emerald-400/20 rounded-full flex items-center justify-center text-emerald-400 mb-4">
-                <Activity className="w-6 h-6" />
+            <Link to="/events" className="group bg-surface/20 border border-border/40 hover:border-border/80 rounded-lg p-5 transition-all flex items-start gap-4">
+              <div className="w-10 h-10 rounded-md bg-white/5 border border-white/10 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-400/10 transition-colors">
+                <Activity className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-medium text-text">Events</h3>
-              <p className="text-muted text-sm mt-1 mb-4">Monitor real-time incoming events</p>
-              <Link to="/events" className="text-emerald-400 hover:underline text-sm font-medium">View Events &rarr;</Link>
-            </div>
+              <div>
+                <h3 className="text-sm font-semibold text-text group-hover:text-emerald-400 transition-colors">Events</h3>
+                <p className="text-muted text-xs mt-1">Monitor real-time incoming events</p>
+              </div>
+            </Link>
 
-            <div className="bg-surface border border-border rounded-xl p-6">
-              <div className="w-12 h-12 bg-rose-400/20 rounded-full flex items-center justify-center text-rose-400 mb-4">
-                <Webhook className="w-6 h-6" />
+            <Link to="/endpoints" className="group bg-surface/20 border border-border/40 hover:border-border/80 rounded-lg p-5 transition-all flex items-start gap-4">
+              <div className="w-10 h-10 rounded-md bg-white/5 border border-white/10 flex items-center justify-center text-rose-400 group-hover:bg-rose-400/10 transition-colors">
+                <Webhook className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-medium text-text">Endpoints</h3>
-              <p className="text-muted text-sm mt-1 mb-4">Configure your webhook destinations</p>
-              <Link to="/endpoints" className="text-rose-400 hover:underline text-sm font-medium">Configure Endpoints &rarr;</Link>
-            </div>
+              <div>
+                <h3 className="text-sm font-semibold text-text group-hover:text-rose-400 transition-colors">Endpoints</h3>
+                <p className="text-muted text-xs mt-1">Configure webhook destinations</p>
+              </div>
+            </Link>
           </div>
 
-          <div className="pt-4 border-t border-border mt-8">
-            <h2 className="text-xl font-semibold text-text mb-6">Delivery Analytics</h2>
+          <div className="mt-10">
+            <h2 className="text-sm font-medium text-text mb-4 uppercase tracking-wider">Delivery Analytics</h2>
             
             {loading ? (
-              <div className="flex items-center justify-center py-12 text-muted">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3"></div>
+              <div className="flex items-center justify-center py-12 text-muted text-sm">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-3"></div>
                 Loading analytics...
               </div>
             ) : fetchError ? (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-6 text-center text-red-400">
-                <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-80" />
+              <div className="border border-red-500/20 rounded-lg p-6 text-center text-red-400 text-sm">
+                <AlertTriangle className="w-5 h-5 mx-auto mb-2 opacity-80" />
                 <p>{fetchError}</p>
               </div>
             ) : analytics && analytics.totalDeliveries === 0 ? (
-              <div className="bg-surface border border-border rounded-xl p-8 text-center">
-                <div className="w-16 h-16 bg-background rounded-full flex items-center justify-center mx-auto mb-4 border border-border">
-                  <Activity className="w-8 h-8 text-muted" />
-                </div>
-                <h3 className="text-lg font-medium text-text mb-2">No Delivery Data</h3>
-                <p className="text-muted">No webhooks were received in the selected time range.</p>
+              <div className="border border-border/40 rounded-lg p-8 text-center bg-surface/10">
+                <Activity className="w-6 h-6 text-muted mx-auto mb-3 opacity-50" />
+                <h3 className="text-sm font-medium text-text mb-1">No Delivery Data</h3>
+                <p className="text-xs text-muted">No webhooks were received in the selected time range.</p>
               </div>
             ) : analytics ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 border border-border/50 rounded-lg overflow-hidden bg-surface/10 divide-x divide-border/50">
                 {/* Total Deliveries */}
-                <div className="bg-surface border border-border rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-muted">Total Deliveries</span>
-                    <Activity className="w-4 h-4 text-primary" />
+                <div className="p-4 hover:bg-surface/20 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Activity className="w-3.5 h-3.5 text-primary opacity-80" />
+                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Total</span>
                   </div>
-                  <div className="text-3xl font-bold text-text">{analytics.totalDeliveries.toLocaleString()}</div>
+                  <div className="text-2xl font-semibold text-text tracking-tight">{analytics.totalDeliveries.toLocaleString()}</div>
                 </div>
 
                 {/* Successful */}
-                <div className="bg-surface border border-border rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-muted">Successful</span>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <div className="p-4 hover:bg-surface/20 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 opacity-80" />
+                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Successful</span>
                   </div>
-                  <div className="text-3xl font-bold text-emerald-400">{analytics.successfulDeliveries.toLocaleString()}</div>
+                  <div className="text-2xl font-semibold text-emerald-400 tracking-tight">{analytics.successfulDeliveries.toLocaleString()}</div>
                 </div>
 
                 {/* Failed */}
-                <div className="bg-surface border border-border rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-muted">Failed</span>
-                    <XCircle className="w-4 h-4 text-rose-400" />
+                <div className="p-4 hover:bg-surface/20 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <XCircle className="w-3.5 h-3.5 text-rose-400 opacity-80" />
+                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Failed</span>
                   </div>
-                  <div className="text-3xl font-bold text-rose-400">{analytics.failedDeliveries.toLocaleString()}</div>
+                  <div className="text-2xl font-semibold text-rose-400 tracking-tight">{analytics.failedDeliveries.toLocaleString()}</div>
                 </div>
 
                 {/* Success Rate */}
-                <div className="bg-surface border border-border rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-muted">Success Rate</span>
-                    <Activity className="w-4 h-4 text-emerald-400" />
+                <div className="p-4 hover:bg-surface/20 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Activity className="w-3.5 h-3.5 text-text opacity-50" />
+                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Success Rate</span>
                   </div>
-                  <div className="text-3xl font-bold text-text">{analytics.successRate}%</div>
-                </div>
-
-                {/* Retry Rate */}
-                <div className="bg-surface border border-border rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-muted">Retry Rate</span>
-                    <RefreshCw className="w-4 h-4 text-amber-400" />
-                  </div>
-                  <div className="text-3xl font-bold text-text">{analytics.retryRate}%</div>
+                  <div className="text-2xl font-semibold text-text tracking-tight">{analytics.successRate}%</div>
                 </div>
 
                 {/* Avg Latency */}
-                <div className="bg-surface border border-border rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-muted">Avg Latency</span>
-                    <Clock className="w-4 h-4 text-blue-400" />
+                <div className="p-4 hover:bg-surface/20 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Clock className="w-3.5 h-3.5 text-blue-400 opacity-80" />
+                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Latency</span>
                   </div>
-                  <div className="text-3xl font-bold text-text">{analytics.averageLatencyMs} <span className="text-lg text-muted">ms</span></div>
-                </div>
-
-                {/* Dead Lettered */}
-                <div className="bg-surface border border-border rounded-xl p-5 md:col-span-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-muted">Dead Lettered (DLQ)</span>
-                    <AlertTriangle className="w-4 h-4 text-rose-500" />
-                  </div>
-                  <div className="text-3xl font-bold text-rose-500">{analytics.deadLettered.toLocaleString()}</div>
-                  <p className="text-xs text-muted mt-2">Events permanently failed after all retry attempts exhausted.</p>
+                  <div className="text-2xl font-semibold text-text tracking-tight">{analytics.averageLatencyMs} <span className="text-sm text-muted font-normal">ms</span></div>
                 </div>
               </div>
             ) : null}
+            
+            {analytics && analytics.totalDeliveries > 0 && analytics.deadLettered > 0 && (
+               <div className="mt-4 flex items-center gap-3 p-3 bg-rose-500/5 border border-rose-500/10 rounded-lg text-sm text-text">
+                 <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                 <p><span className="font-semibold text-rose-500">{analytics.deadLettered.toLocaleString()}</span> events were permanently dead-lettered after exhausting all retries.</p>
+               </div>
+            )}
           </div>
           
-          <div className="pt-8 mt-4">
+          <div className="pt-8">
              {loading ? (
-               <div className="h-80 w-full flex items-center justify-center text-muted bg-surface/50 border border-border/50 rounded-xl animate-pulse">
+               <div className="h-64 w-full flex items-center justify-center text-xs text-muted bg-surface/5 border border-border/20 rounded-lg animate-pulse">
                  Loading trends...
                </div>
              ) : fetchError ? (
                 null
              ) : trends && trends.data && trends.data.length > 0 ? (
-                <TrendChart data={trends.data} timeRange={timeRange} />
+                <div className="border border-border/30 rounded-lg p-1 bg-surface/5">
+                  <TrendChart data={trends.data} timeRange={timeRange} />
+                </div>
              ) : (
-                <div className="h-80 w-full flex flex-col items-center justify-center text-muted bg-surface border border-border rounded-xl">
-                  <Activity className="w-8 h-8 mb-3 opacity-50" />
+                <div className="h-64 w-full flex flex-col items-center justify-center text-xs text-muted bg-surface/10 border border-border/40 rounded-lg">
+                  <Activity className="w-5 h-5 mb-2 opacity-30" />
                   No delivery activity in this period.
                 </div>
              )}
           </div>
 
-          <div className="pt-8 border-t border-border mt-8">
-            <h2 className="text-xl font-semibold text-text mb-6">Endpoint Health</h2>
+          <div className="mt-10">
+            <h2 className="text-sm font-medium text-text mb-4 uppercase tracking-wider">Endpoint Health</h2>
             
             {loading ? (
-              <div className="flex items-center justify-center py-12 text-muted">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3"></div>
+              <div className="flex items-center justify-center py-12 text-muted text-sm">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-3"></div>
                 Loading endpoint health...
               </div>
             ) : fetchError ? (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-6 text-center text-red-400">
-                <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-80" />
+              <div className="border border-red-500/20 rounded-lg p-6 text-center text-red-400 text-sm">
+                <AlertTriangle className="w-5 h-5 mx-auto mb-2 opacity-80" />
                 <p>Failed to load endpoint health.</p>
               </div>
             ) : !endpointHealth || endpointHealth.endpoints.length === 0 ? (
-               <div className="bg-surface border border-border rounded-xl p-8 text-center">
-                 <div className="w-16 h-16 bg-background rounded-full flex items-center justify-center mx-auto mb-4 border border-border">
-                   <Webhook className="w-8 h-8 text-muted" />
-                 </div>
-                 <h3 className="text-lg font-medium text-text mb-2">No Endpoints Found</h3>
-                 <p className="text-muted">No endpoints exist in this workspace.</p>
+               <div className="border border-border/40 rounded-lg p-8 text-center bg-surface/10">
+                 <Webhook className="w-6 h-6 text-muted mx-auto mb-3 opacity-50" />
+                 <h3 className="text-sm font-medium text-text mb-1">No Endpoints Found</h3>
+                 <p className="text-xs text-muted">No endpoints exist in this workspace.</p>
                </div>
             ) : (
-               <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
+               <div className="border border-border/50 rounded-lg overflow-hidden bg-surface/10">
                  <div className="overflow-x-auto">
-                   <table className="w-full text-left border-collapse">
+                   <table className="w-full text-left border-collapse whitespace-nowrap">
                      <thead>
-                       <tr className="bg-background border-b border-border">
-                         <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Endpoint</th>
-                         <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Status</th>
-                         <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-right">Success</th>
-                         <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-right">Latency</th>
-                         <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-right">Failures</th>
+                       <tr className="border-b border-border/50">
+                         <th className="px-4 py-3 text-xs font-medium text-muted uppercase tracking-wider w-full">Endpoint URL</th>
+                         <th className="px-4 py-3 text-xs font-medium text-muted uppercase tracking-wider text-center">Status</th>
+                         <th className="px-4 py-3 text-xs font-medium text-muted uppercase tracking-wider text-right">Success</th>
+                         <th className="px-4 py-3 text-xs font-medium text-muted uppercase tracking-wider text-right">Latency</th>
+                         <th className="px-4 py-3 text-xs font-medium text-muted uppercase tracking-wider text-right">Failures</th>
                        </tr>
                      </thead>
-                     <tbody className="divide-y divide-border">
+                     <tbody className="divide-y divide-border/30">
                        {endpointHealth.endpoints.map(ep => (
-                         <tr key={ep._id} className="hover:bg-white/5 transition-colors">
-                           <td className="px-6 py-4">
-                             <div className="font-mono text-sm text-text truncate max-w-[300px]">{ep.destinationUrl || ep.endpointId}</div>
-                             <div className="text-xs text-muted mt-1">{ep.endpointId}</div>
+                         <tr key={ep._id} className="hover:bg-surface/30 transition-colors group">
+                           <td className="px-4 py-3">
+                             <div className="flex items-center gap-3">
+                               <div className="w-2 h-2 rounded-full flex-shrink-0 bg-primary/40 group-hover:bg-primary transition-colors"></div>
+                               <div>
+                                 <div className="font-mono text-sm text-text truncate max-w-[250px] md:max-w-md">{ep.destinationUrl || ep.endpointId}</div>
+                                 <div className="text-xs text-muted/60 font-mono mt-0.5">{ep.endpointId}</div>
+                               </div>
+                             </div>
                            </td>
-                           <td className="px-6 py-4">
+                           <td className="px-4 py-3 text-center">
                              {ep.health === 'healthy' ? (
-                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">
-                                 <CheckCircle2 className="w-3.5 h-3.5" /> Healthy
+                               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wide">
+                                 Healthy
                                </span>
                              ) : ep.health === 'degraded' ? (
-                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-400/10 text-amber-400 border border-amber-400/20">
-                                 <AlertTriangle className="w-3.5 h-3.5" /> Degraded
+                               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase tracking-wide">
+                                 Degraded
                                </span>
                              ) : ep.health === 'unhealthy' ? (
-                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-400/10 text-rose-400 border border-rose-400/20">
-                                 <XCircle className="w-3.5 h-3.5" /> Unhealthy
+                               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 uppercase tracking-wide">
+                                 Unhealthy
                                </span>
                              ) : (
-                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white/5 text-muted border border-white/10">
-                                 <Activity className="w-3.5 h-3.5" /> No Data
+                               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-white/5 text-muted border border-white/10 uppercase tracking-wide">
+                                 No Data
                                </span>
                              )}
                            </td>
-                           <td className="px-6 py-4 text-right">
+                           <td className="px-4 py-3 text-right">
                              {ep.health !== 'no_data' ? (
-                               <span className="font-medium text-text">{ep.successRate}%</span>
+                               <span className="text-sm text-text font-medium">{ep.successRate}%</span>
                              ) : (
-                               <span className="text-muted">-</span>
+                               <span className="text-sm text-muted/30">-</span>
                              )}
                            </td>
-                           <td className="px-6 py-4 text-right">
+                           <td className="px-4 py-3 text-right">
                              {ep.health !== 'no_data' ? (
-                               <span className="font-medium text-text">{ep.averageLatencyMs}ms</span>
+                               <span className="text-sm text-text font-medium">{ep.averageLatencyMs}ms</span>
                              ) : (
-                               <span className="text-muted">-</span>
+                               <span className="text-sm text-muted/30">-</span>
                              )}
                            </td>
-                           <td className="px-6 py-4 text-right">
+                           <td className="px-4 py-3 text-right">
                              {ep.health !== 'no_data' ? (
-                               <span className={`font-medium ${ep.failedDeliveries > 0 ? 'text-rose-400' : 'text-text'}`}>
+                               <span className={`text-sm font-medium ${ep.failedDeliveries > 0 ? 'text-rose-400' : 'text-text'}`}>
                                  {ep.failedDeliveries.toLocaleString()}
                                </span>
                              ) : (
-                               <span className="text-muted">-</span>
+                               <span className="text-sm text-muted/30">-</span>
                              )}
                            </td>
                          </tr>
