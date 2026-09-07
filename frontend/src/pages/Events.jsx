@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { useGhostMode } from '../context/GhostModeContext';
 import { useSocket } from '../context/SocketContext';
 import api from '../services/api';
 import {
@@ -22,6 +23,7 @@ import { getErrorMessage } from '../utils/errorHandler';
 
 export default function Events() {
   const { activeWorkspace, loading: workspaceLoading, projects, projectsLoading: isProjectsLoading } = useWorkspace();
+  const { isGhostMode, redactEventId, redactProjectName, redactDestinationUrl } = useGhostMode();
   const { socket } = useSocket();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -339,7 +341,7 @@ export default function Events() {
   const handleCopyEventId = (e, eventId) => {
     e.stopPropagation();
     if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(eventId);
+      navigator.clipboard.writeText(isGhostMode ? redactEventId(eventId) : eventId);
     }
     setCopiedId(eventId);
     setTimeout(() => {
@@ -432,7 +434,7 @@ export default function Events() {
                 disabled={projects.length === 0}
               >
                 {projects.map(p => (
-                  <option key={p._id} value={p._id}>{p.name}</option>
+                  <option key={p._id} value={p._id}>{redactProjectName(p.name)}</option>
                 ))}
               </select>
             </div>
@@ -633,7 +635,10 @@ export default function Events() {
                           className="font-mono text-xs text-text group-hover:text-primary transition-colors tracking-tight select-all truncate"
                           title={event.eventId}
                         >
-                          {event.eventId.length > 18 ? `${event.eventId.slice(0, 16)}…` : event.eventId}
+                          {(() => {
+                            const displayId = redactEventId(event.eventId);
+                            return displayId.length > 18 ? `${displayId.slice(0, 16)}…` : displayId;
+                          })()}
                         </span>
                         <button
                           type="button"
@@ -677,7 +682,7 @@ export default function Events() {
                         className="font-mono text-xs text-muted truncate max-w-[180px] block"
                         title={getEndpointHostname(event)}
                       >
-                        {getEndpointHostname(event)}
+                        {redactDestinationUrl(getEndpointHostname(event)) || '—'}
                       </span>
                     </td>
 

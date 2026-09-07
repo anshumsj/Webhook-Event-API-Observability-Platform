@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { useGhostMode } from '../context/GhostModeContext';
 import api from '../services/api';
 import {
   FolderKanban,
@@ -30,6 +31,8 @@ export default function Projects() {
     projectsLoading,
     refreshProjects,
   } = useWorkspace();
+
+  const { redactWorkspaceName, redactProjectName, redactId } = useGhostMode();
 
   const [error, setError] = useState(null);
 
@@ -226,14 +229,14 @@ export default function Projects() {
               >
                 {workspaces.map((w) => (
                   <option key={w._id} value={w._id}>
-                    {w.name}
+                    {redactWorkspaceName(w.name)}
                   </option>
                 ))}
               </select>
             ) : (
               <div className="flex items-center gap-2 h-8 px-2.5 bg-canvas border border-border rounded">
                 <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                <span className="font-medium text-text truncate">{activeWorkspace.name}</span>
+                <span className="font-medium text-text truncate">{redactWorkspaceName(activeWorkspace.name)}</span>
               </div>
             )}
           </div>
@@ -244,11 +247,11 @@ export default function Projects() {
               <span className="text-[10px] font-mono text-muted uppercase tracking-wider">
                 Workspace ID
               </span>
-              <ClipboardCopy text={activeWorkspace._id} label="Copy" className="px-1 py-0 text-[10px]" />
+              <ClipboardCopy text={activeWorkspace._id} displayText={redactId(activeWorkspace._id)} label="Copy" className="px-1 py-0 text-[10px]" />
             </div>
             <div className="h-8 px-2.5 bg-canvas border border-border rounded flex items-center">
               <span className="font-mono text-xs text-text truncate select-all">
-                {activeWorkspace._id}
+                {redactId(activeWorkspace._id)}
               </span>
             </div>
           </div>
@@ -372,7 +375,7 @@ export default function Projects() {
                       <div className="flex items-center gap-2">
                         <FolderKanban className="w-3.5 h-3.5 text-primary shrink-0" />
                         <span className="font-medium text-text group-hover:text-primary transition-colors tracking-tight">
-                          {project.name}
+                          {redactProjectName(project.name)}
                         </span>
                       </div>
                     </td>
@@ -382,11 +385,11 @@ export default function Projects() {
                       <div className="flex items-center gap-1.5">
                         <span
                           className="font-mono text-xs text-text select-all tracking-tight truncate max-w-[150px]"
-                          title={project._id}
+                          title={redactId(project._id)}
                         >
-                          {project._id}
+                          {redactId(project._id)}
                         </span>
-                        <ClipboardCopy text={project._id} label="Copy ID" />
+                        <ClipboardCopy text={project._id} displayText={redactId(project._id)} label="Copy ID" />
                       </div>
                     </td>
 
@@ -456,9 +459,9 @@ export default function Projects() {
                 <span className="text-[10px] font-mono text-muted uppercase tracking-wider block">
                   Target Workspace
                 </span>
-                <span className="font-medium text-text block">{activeWorkspace.name}</span>
+                <span className="font-medium text-text block">{redactWorkspaceName(activeWorkspace.name)}</span>
                 <span className="font-mono text-[11px] text-muted block truncate">
-                  ID: {activeWorkspace._id}
+                  ID: {redactId(activeWorkspace._id)}
                 </span>
               </div>
 

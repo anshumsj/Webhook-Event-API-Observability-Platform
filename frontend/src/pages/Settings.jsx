@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useSocket } from '../context/SocketContext';
+import { useGhostMode } from '../context/GhostModeContext';
 import {
   Settings as SettingsIcon,
   Building2,
@@ -20,6 +21,7 @@ export default function Settings() {
   const { user, logout } = useAuth();
   const { activeWorkspace, projects } = useWorkspace();
   const { isConnected } = useSocket();
+  const { redactWorkspaceName, redactId, redactUserName, redactEmail, redactUrl } = useGhostMode();
 
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
@@ -48,7 +50,7 @@ export default function Settings() {
               Scoped:
             </span>
             <span className="font-mono text-xs text-text bg-surface-2 border border-border px-2 py-0.5 rounded">
-              {activeWorkspace.name}
+              {redactWorkspaceName(activeWorkspace.name)}
             </span>
           </div>
         )}
@@ -73,7 +75,7 @@ export default function Settings() {
               Workspace Name
             </span>
             <span className="font-semibold text-text text-sm">
-              {activeWorkspace?.name || '—'}
+              {redactWorkspaceName(activeWorkspace?.name) || '—'}
             </span>
           </div>
 
@@ -84,11 +86,11 @@ export default function Settings() {
                 Workspace ID
               </span>
               {activeWorkspace?._id && (
-                <ClipboardCopy text={activeWorkspace._id} label="Copy" className="px-1 py-0 text-[10px]" />
+                <ClipboardCopy text={activeWorkspace._id} displayText={redactId(activeWorkspace._id)} label="Copy" className="px-1 py-0 text-[10px]" />
               )}
             </div>
             <span className="font-mono text-xs text-text truncate block select-all">
-              {activeWorkspace?._id || '—'}
+              {redactId(activeWorkspace?._id) || '—'}
             </span>
           </div>
 
@@ -131,7 +133,7 @@ export default function Settings() {
                 Developer Name
               </span>
               <span className="font-medium text-text text-sm">
-                {user?.name || 'Developer'}
+                {redactUserName(user?.name) || 'Developer'}
               </span>
             </div>
 
@@ -140,7 +142,7 @@ export default function Settings() {
                 Authenticated Email
               </span>
               <span className="font-mono text-xs text-text select-all">
-                {user?.email || '—'}
+                {redactEmail(user?.email) || '—'}
               </span>
             </div>
           </div>
@@ -182,10 +184,10 @@ export default function Settings() {
               <span className="text-[10px] font-mono text-muted uppercase tracking-wider">
                 API Gateway Base URL
               </span>
-              <ClipboardCopy text={apiBaseUrl} label="Copy" className="px-1 py-0 text-[10px]" />
+              <ClipboardCopy text={apiBaseUrl} displayText={redactUrl(apiBaseUrl)} label="Copy" className="px-1 py-0 text-[10px]" />
             </div>
             <div className="font-mono text-xs text-text select-all truncate">
-              {apiBaseUrl}
+              {redactUrl(apiBaseUrl)}
             </div>
           </div>
 

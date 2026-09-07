@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import { useSocket } from '../context/SocketContext';
+import { useGhostMode } from '../context/GhostModeContext';
 import {
   ArrowLeft,
   Clock,
@@ -27,6 +28,10 @@ export default function EventDetails() {
   const navigate = useNavigate();
   const location = useLocation();
   const { socket } = useSocket();
+  const {
+    redactEventId, redactRequestId, redactEndpointId,
+    redactProjectName, redactPayload, redactHeaders,
+  } = useGhostMode();
 
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -170,14 +175,16 @@ export default function EventDetails() {
     }
   }
 
+  const displayPayload = redactPayload(event.payload);
   const payloadString =
-    typeof event.payload === 'object' && event.payload !== null
-      ? JSON.stringify(event.payload, null, 2)
-      : String(event.payload || '');
+    typeof displayPayload === 'object' && displayPayload !== null
+      ? JSON.stringify(displayPayload, null, 2)
+      : String(displayPayload || '');
 
+  const displayHeaders = redactHeaders(event.headers);
   const headersString =
-    event.headers && typeof event.headers === 'object'
-      ? JSON.stringify(event.headers, null, 2)
+    displayHeaders && typeof displayHeaders === 'object'
+      ? JSON.stringify(displayHeaders, null, 2)
       : '{}';
 
   return (
@@ -201,9 +208,9 @@ export default function EventDetails() {
 
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <span className="font-mono text-sm font-semibold text-text select-all tracking-tight truncate">
-              {event.eventId}
+              {redactEventId(event.eventId)}
             </span>
-            <ClipboardCopy text={event.eventId} label="Copy ID" />
+            <ClipboardCopy text={event.eventId} displayText={redactEventId(event.eventId)} label="Copy ID" />
 
             <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-surface-2 border border-border text-muted uppercase shrink-0">
               POST
@@ -303,14 +310,14 @@ export default function EventDetails() {
               Request ID
             </span>
             {event.requestId && (
-              <ClipboardCopy text={event.requestId} label="Copy" className="px-1 py-0 text-[10px]" />
+              <ClipboardCopy text={event.requestId} displayText={redactRequestId(event.requestId)} label="Copy" className="px-1 py-0 text-[10px]" />
             )}
           </div>
           <span
             className="text-xs font-mono text-text block truncate"
-            title={event.requestId}
+            title={redactRequestId(event.requestId)}
           >
-            {event.requestId || '—'}
+            {redactRequestId(event.requestId) || '—'}
           </span>
         </div>
 
@@ -321,9 +328,9 @@ export default function EventDetails() {
           </span>
           <span
             className="text-xs font-medium text-text block truncate"
-            title={event.projectName || event.projectId}
+            title={redactProjectName(event.projectName || event.projectId)}
           >
-            {event.projectName || event.projectId || '—'}
+            {redactProjectName(event.projectName || event.projectId) || '—'}
           </span>
         </div>
       </div>
@@ -408,9 +415,9 @@ export default function EventDetails() {
               {/* Copy Affordance */}
               <div>
                 {activeInspectorTab === 'payload' ? (
-                  <ClipboardCopy text={payloadString} label="Copy Payload" />
+                  <ClipboardCopy text={payloadString} displayText={payloadString} label="Copy Payload" />
                 ) : (
-                  <ClipboardCopy text={headersString} label="Copy Headers" />
+                  <ClipboardCopy text={headersString} displayText={headersString} label="Copy Headers" />
                 )}
               </div>
             </div>
@@ -427,7 +434,7 @@ export default function EventDetails() {
                 <div className="bg-canvas border border-border rounded p-3 max-h-[380px] overflow-y-auto">
                   {event.headers && Object.keys(event.headers).length > 0 ? (
                     <div className="divide-y divide-border/40 font-mono text-xs">
-                      {Object.entries(event.headers).map(([key, val]) => (
+                      {Object.entries(displayHeaders).map(([key, val]) => (
                         <div
                           key={key}
                           className="py-1.5 flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 first:pt-0 last:pb-0"
@@ -512,8 +519,8 @@ export default function EventDetails() {
                   <span className="text-[10px] uppercase text-muted tracking-wider block mb-0.5">
                     Endpoint Binding
                   </span>
-                  <span className="text-text truncate block select-all" title={String(event.endpointId)}>
-                    {String(event.endpointId)}
+                  <span className="text-text truncate block select-all" title={redactEndpointId(String(event.endpointId))}>
+                    {redactEndpointId(String(event.endpointId))}
                   </span>
                 </div>
               )}

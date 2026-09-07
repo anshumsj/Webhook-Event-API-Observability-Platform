@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { useGhostMode } from '../context/GhostModeContext';
 import {
   Activity,
   Webhook,
@@ -21,6 +22,7 @@ import { getErrorMessage } from '../utils/errorHandler';
 
 const Home = () => {
   const { activeWorkspace, createWorkspace, loading: workspaceLoading } = useWorkspace();
+  const { redactWorkspaceName, redactEndpointId, redactDestinationUrl } = useGhostMode();
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [error, setError] = useState('');
 
@@ -139,7 +141,7 @@ const Home = () => {
               Dashboard
             </h1>
             <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-surface-2 border border-border text-muted">
-              {activeWorkspace.name}
+              {redactWorkspaceName(activeWorkspace.name)}
             </span>
           </div>
           <p className="text-xs text-muted mt-1 font-sans">
@@ -368,10 +370,10 @@ const Home = () => {
                           <div className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
                           <div className="min-w-0">
                             <div className="font-mono text-xs text-text truncate max-w-xs md:max-w-md">
-                              {ep.destinationUrl || ep.endpointId}
+                              {ep.destinationUrl ? redactDestinationUrl(ep.destinationUrl) : redactEndpointId(ep.endpointId)}
                             </div>
                             <div className="font-mono text-[10px] text-muted truncate">
-                              ID: {ep.endpointId}
+                              ID: {redactEndpointId(ep.endpointId)}
                             </div>
                           </div>
                         </div>

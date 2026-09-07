@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { useGhostMode } from '../context/GhostModeContext';
 import api from '../services/api';
 import {
   Webhook,
@@ -29,6 +30,10 @@ import { getErrorMessage } from '../utils/errorHandler';
 
 export default function Endpoints() {
   const { activeWorkspace, loading: workspaceLoading, projects, projectsLoading: isProjectsLoading } = useWorkspace();
+  const {
+    isGhostMode, redactEndpointId, redactDestinationUrl,
+    redactWebhookIngestUrl, redactSecret, redactCurlSnippet, redactProjectName,
+  } = useGhostMode();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlProject = searchParams.get('project') || '';
   const [selectedProjectId, setSelectedProjectId] = useState(urlProject);
@@ -270,7 +275,7 @@ export default function Endpoints() {
                 >
                 {projects.map((p) => (
                   <option key={p._id} value={p._id}>
-                    {p.name}
+                    {redactProjectName(p.name)}
                   </option>
                 ))}
               </select>
@@ -350,11 +355,12 @@ export default function Endpoints() {
       ) : (
         <div className="space-y-4">
           {endpoints.map((endpoint) => {
-            const fullUrl = `${baseUrl}/webhooks/${endpoint.endpointId}`;
-            const isSecretRevealed = Boolean(revealedSecrets[endpoint.endpointId]);
+            const fullUrl = redactWebhookIngestUrl(`${baseUrl}/webhooks/${endpoint.endpointId}`);
+            const realFullUrl = `${baseUrl}/webhooks/${endpoint.endpointId}`;
+            const isSecretRevealed = isGhostMode ? false : Boolean(revealedSecrets[endpoint.endpointId]);
             const isCurlExpanded = Boolean(expandedCurl[endpoint.endpointId]);
 
-            const curlSnippet = `curl -X POST "${fullUrl}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"event": "ping", "timestamp": "${new Date().toISOString()}"}'`;
+            const curlSnippet = redactCurlSnippet(`curl -X POST "${realFullUrl}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"event": "ping", "timestamp": "${new Date().toISOString()}"}'`);
 
             return (
               <div
@@ -374,9 +380,9 @@ export default function Endpoints() {
                         POST
                       </span>
                       <span className="font-semibold text-text tracking-tight select-all">
-                        {endpoint.endpointId}
+                        {redactEndpointId(endpoint.endpointId)}
                       </span>
-                      <ClipboardCopy text={endpoint.endpointId} label="Copy ID" />
+                      <ClipboardCopy text={endpoint.endpointId} displayText={redactEndpointId(endpoint.endpointId)} label="Copy ID" />
                     </div>
 
                     <div className="h-3 w-px bg-border hidden sm:block" />
@@ -389,9 +395,9 @@ export default function Endpoints() {
                       {endpoint.destinationUrl ? (
                         <span
                           className="text-text truncate max-w-[260px] select-all"
-                          title={endpoint.destinationUrl}
+                          title={redactDestinationUrl(endpoint.destinationUrl)}
                         >
-                          {endpoint.destinationUrl}
+                          {redactDestinationUrl(endpoint.destinationUrl)}
                         </span>
                       ) : (
                         <span className="text-muted/60 italic text-[11px]">
@@ -529,7 +535,7 @@ export default function Endpoints() {
                       <span className="text-[10px] uppercase tracking-wider text-muted font-medium">
                         Incoming Ingest URL
                       </span>
-                      <ClipboardCopy text={fullUrl} label="Copy URL" />
+                      <ClipboardCopy text={realFullUrl} displayText={fullUrl} label="Copy URL" />
                     </div>
                     <div className="p-2 bg-canvas border border-border rounded text-text select-all overflow-x-auto text-xs whitespace-nowrap">
                       {fullUrl}
@@ -547,12 +553,13 @@ export default function Endpoints() {
                         {endpoint.destinationUrl && (
                           <ClipboardCopy
                             text={endpoint.destinationUrl}
+                            displayText={redactDestinationUrl(endpoint.destinationUrl)}
                             label="Copy Destination"
                           />
                         )}
                       </div>
                       <div className="p-2 bg-canvas border border-border rounded text-text select-all overflow-x-auto text-xs whitespace-nowrap">
-                        {endpoint.destinationUrl || (
+                        {endpoint.destinationUrl ? redactDestinationUrl(endpoint.destinationUrl) : (
                           <span className="text-muted/60 italic">Not configured</span>
                         )}
                       </div>
@@ -567,9 +574,12 @@ export default function Endpoints() {
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            onClick={() => toggleSecretVisibility(endpoint.endpointId)}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-2 border border-border text-xs text-muted hover:text-text hover:bg-surface-3 transition-colors cursor-pointer select-none"
-                            title={isSecretRevealed ? 'Hide secret' : 'Reveal secret'}
+                            onClick={() => !isGhostMode && toggleSecretVisibility(endpoint.endpointId)}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-2 border border-border text-xs text-muted hover:text-text hover:bg-surface-3 transition-colors select-none ${
+                              isGhostMode ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                            }`}
+                            title={isGhostMode ? 'Reveal disabled — Ghost Mode active' : (isSecretRevealed ? 'Hide secret' : 'Reveal secret')}
+                            disabled={isGhostMode}
                           >
                             {isSecretRevealed ? (
                               <EyeOff className="w-3 h-3" />
@@ -578,13 +588,13 @@ export default function Endpoints() {
                             )}
                             <span>{isSecretRevealed ? 'Hide' : 'Reveal'}</span>
                           </button>
-                          <ClipboardCopy text={endpoint.secret} label="Copy Secret" />
+                          <ClipboardCopy text={endpoint.secret} displayText={redactSecret(endpoint.secret)} label="Copy Secret" />
                         </div>
                       </div>
                       <div className="p-2 bg-canvas border border-border rounded text-text select-all overflow-x-auto text-xs whitespace-nowrap">
-                        {isSecretRevealed
+                        {isSecretRevealed && !isGhostMode
                           ? endpoint.secret || '—'
-                          : '•'.repeat(40)}
+                          : redactSecret(endpoint.secret)}
                       </div>
                     </div>
                   </div>
@@ -596,7 +606,7 @@ export default function Endpoints() {
                         <span className="text-[10px] uppercase tracking-wider text-muted font-medium flex items-center gap-1.5">
                           <Terminal className="w-3 h-3 text-primary" /> cURL Ingest Test
                         </span>
-                        <ClipboardCopy text={curlSnippet} label="Copy cURL" />
+                        <ClipboardCopy text={curlSnippet} displayText={curlSnippet} label="Copy cURL" />
                       </div>
                       <pre className="p-2.5 bg-canvas border border-border rounded text-xs text-muted leading-relaxed select-all overflow-x-auto">
                         {curlSnippet}
@@ -699,13 +709,13 @@ export default function Endpoints() {
                 <div className="flex items-center justify-between text-muted text-[11px]">
                   <span>ENDPOINT ID</span>
                   <span className="text-text font-semibold select-all">
-                    {deletingEndpoint.endpointId}
+                    {redactEndpointId(deletingEndpoint.endpointId)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-muted text-[11px] truncate">
                   <span>DESTINATION</span>
                   <span className="text-text truncate max-w-[200px] select-all">
-                    {deletingEndpoint.destinationUrl || 'Not configured'}
+                    {deletingEndpoint.destinationUrl ? redactDestinationUrl(deletingEndpoint.destinationUrl) : 'Not configured'}
                   </span>
                 </div>
               </div>

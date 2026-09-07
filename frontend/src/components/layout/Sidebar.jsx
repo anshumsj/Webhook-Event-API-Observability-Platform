@@ -11,6 +11,7 @@ import {
   Radio,
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
+import { useGhostMode } from '../../context/GhostModeContext';
 
 const NAV_GROUPS = [
   {
@@ -31,6 +32,7 @@ const NAV_GROUPS = [
 
 export default function Sidebar({ isOpen = false, onClose }) {
   const { workspaces, activeWorkspace, setActiveWorkspace } = useWorkspace();
+  const { redactWorkspaceName } = useGhostMode();
   const navigate = useNavigate();
 
   const handleWorkspaceChange = (e) => {
@@ -88,7 +90,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
             <div className="flex items-center gap-2 px-2.5 h-8 bg-surface-2 border border-border rounded text-xs text-text hover:border-border-strong transition-colors cursor-pointer">
               <div className="w-4 h-4 rounded-sm bg-primary/20 text-primary flex items-center justify-center font-mono font-bold text-[10px] shrink-0">
                 {activeWorkspace?.name
-                  ? activeWorkspace.name.charAt(0).toUpperCase()
+                  ? redactWorkspaceName(activeWorkspace.name).charAt(0).toUpperCase()
                   : 'W'}
               </div>
               <select
@@ -102,7 +104,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                     value={w._id}
                     className="bg-surface-1 text-text"
                   >
-                    {w.name}
+                    {redactWorkspaceName(w.name)}
                   </option>
                 ))}
                 <option

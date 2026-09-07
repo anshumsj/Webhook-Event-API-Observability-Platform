@@ -11,10 +11,12 @@ import {
 } from 'lucide-react';
 import ClipboardCopy from './ClipboardCopy';
 import StatusBadge from './ui/StatusBadge';
+import { useGhostMode } from '../context/GhostModeContext';
 
 export default function AttemptTimeline({ attempts, eventStatus, eventPayload }) {
   const [expandedAttemptId, setExpandedAttemptId] = useState(null);
   const [activeTab, setActiveTab] = useState('request'); // 'request' | 'response'
+  const { redactDestinationUrl, redactHeaders: redactHdrs } = useGhostMode();
 
   if (!attempts || attempts.length === 0) return null;
 
@@ -201,7 +203,7 @@ export default function AttemptTimeline({ attempts, eventStatus, eventPayload })
                       className="text-muted truncate text-[11px]"
                       title={attempt.destinationUrl}
                     >
-                      {attempt.destinationUrl || 'Unknown destination'}
+                      {redactDestinationUrl(attempt.destinationUrl) || 'Unknown destination'}
                     </span>
                   </div>
 
@@ -264,6 +266,7 @@ export default function AttemptTimeline({ attempts, eventStatus, eventPayload })
                             {attempt.destinationUrl && (
                               <ClipboardCopy
                                 text={`${attempt.requestMethod || 'POST'} ${attempt.destinationUrl}`}
+                                displayText={`${attempt.requestMethod || 'POST'} ${redactDestinationUrl(attempt.destinationUrl)}`}
                                 label="Copy URL"
                               />
                             )}
@@ -273,7 +276,7 @@ export default function AttemptTimeline({ attempts, eventStatus, eventPayload })
                               {attempt.requestMethod || 'POST'}
                             </span>
                             <span className="text-text select-all whitespace-nowrap">
-                              {attempt.destinationUrl || <span className="italic text-muted">Unknown</span>}
+                              {attempt.destinationUrl ? redactDestinationUrl(attempt.destinationUrl) : <span className="italic text-muted">Unknown</span>}
                             </span>
                           </div>
                         </div>
@@ -293,7 +296,7 @@ export default function AttemptTimeline({ attempts, eventStatus, eventPayload })
                               )}
                           </div>
                           <div className="bg-canvas border border-border p-3 rounded max-h-48 overflow-y-auto">
-                            {renderHeaders(attempt.requestHeaders)}
+                            {renderHeaders(redactHdrs(attempt.requestHeaders))}
                           </div>
                         </div>
 
